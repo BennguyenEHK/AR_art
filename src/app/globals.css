@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* ── Palette — warm parchment + deep ink + a single clay accent ───────────── */
+:root {
+  --paper: #f4ece0;          /* warm cream background */
+  --paper-deep: #ece1d0;     /* one shade darker for contrast wells */
+  --ink: #1c1714;            /* near-black with brown undertone */
+  --ink-soft: #463a32;       /* subdued body text */
+  --ink-faint: #847566;      /* meta / labels */
+  --rule: #d9cdb9;            /* paper-on-paper hairlines */
+  --accent: #a04a2a;          /* terracotta — the only saturated note */
+  --accent-soft: #c87a4a;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --font-display: var(--font-display, "Cormorant Garamond", serif);
+  --font-mono: var(--font-mono, "JetBrains Mono", monospace);
+}
+
+/* Body picks the display serif so prose feels editorial, not interface-y */
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display), serif;
+  font-feature-settings: "ss01", "liga";
+  /* very subtle paper grain so the cream doesn't read as a flat color */
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(160, 74, 42, 0.04), transparent 55%),
+    radial-gradient(circle at 80% 90%, rgba(28, 23, 20, 0.05), transparent 60%);
+}
+
+/* Override body color on the AR route — that page is full-bleed black */
+body:has(.ar-fullbleed) {
+  background: #000;
+}
+
+/* Hairline horizontal rule used in the editorial layout */
+.hairline {
+  border-top: 1px solid var(--rule);
+}
+
+/* Vertical ticker text, used for the side label */
+.vertical-rl {
+  writing-mode: vertical-rl;
+  letter-spacing: 0.32em;
+}
+
+/* Tiny utility — used on monospace labels */
+.tiny-caps {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Reduce motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
