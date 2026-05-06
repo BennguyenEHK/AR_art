@@ -20,7 +20,9 @@ import {
 type Status = "idle" | "starting" | "scanning" | "tracking" | "error";
 
 const TARGET_PATH = "/targets/board.mind";
-const MODEL_PATH = "/models/statue.glb";
+// Change this to point at any .glb you drop into /public/models/.
+// If the file is missing, ARScene falls back to a glowing placeholder shape.
+const MODEL_PATH = "/models/Tree.glb";
 
 export default function ARScene() {
   // The container <div> MindAR mounts the camera <video> + <canvas> into
