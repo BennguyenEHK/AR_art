@@ -45,9 +45,22 @@ export default function ARScene() {
       setStatus("starting");
 
       try {
+        // Pin the container to the exact visual-viewport size before MindAR
+        // reads clientWidth/Height in its internal resize(). On Android Chrome,
+        // fixed-position layout may not be flushed when the loadedmetadata
+        // callback fires, so CSS alone gives a stale value. window.innerWidth
+        // is always authoritative.
+        const container = containerRef.current!;
+        const syncSize = () => {
+          container.style.width  = window.innerWidth  + 'px';
+          container.style.height = window.innerHeight + 'px';
+        };
+        syncSize();
+        window.addEventListener('resize', syncSize);
+
         // Spin up MindAR — this is the bridge between camera + Three.js
         const mindar = new MindARThree({
-          container: containerRef.current!,
+          container,
           imageTargetSrc: TARGET_PATH,
           uiScanning: "no", // we draw our own minimal HUD
           uiLoading: "no",
@@ -72,7 +85,7 @@ export default function ARScene() {
           placed = gltf.scene;
           placed.scale.setScalar(0.5); // reasonable default for a board-sized print
           placed.position.y = 0.0;
-          placed.rotation.x = -Math.PI / 2;
+          placed.rotation.x = +Math.PI / 2;
         } catch {
           // Soft-glowing icosahedron — recognizable as "placeholder" without being ugly
           if (mounted) setUsedFallbackModel(true);
@@ -110,6 +123,9 @@ export default function ARScene() {
           mindar.stop();
           return;
         }
+        // Belt-and-suspenders: after start() resolves, force MindAR to re-read
+        // the now-settled container dimensions via its own resize listener.
+        window.dispatchEvent(new Event('resize'));
         setStatus("scanning");
 
         // Render loop: rotate, render, optionally publish.
@@ -135,6 +151,7 @@ export default function ARScene() {
           unsubscribe();
           mindar.stop();
           renderer.dispose();
+          window.removeEventListener('resize', syncSize);
         };
       } catch (e: unknown) {
         if (!mounted) return;
