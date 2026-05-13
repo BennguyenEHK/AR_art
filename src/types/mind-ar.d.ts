@@ -34,5 +34,8 @@ declare module "mind-ar/dist/mindar-image-three.prod.js" {
     addAnchor(targetIndex: number): MindARThreeAnchor;
     start(): Promise<void>;
     stop(): void;
+    // Re-snapshots container.clientWidth/Height onto canvas+video; called
+    // manually after layout settles or on visualViewport resize.
+    resize(): void;
   }
 }

@@ -45,9 +45,20 @@ export default function ARScene() {
       setStatus("starting");
 
       try {
+        // Pin the container to authoritative visual-viewport pixels before
+        // MindAR snapshots r.clientWidth/Height inside its internal resize().
+        // window.innerWidth/Height is the post-layout visual viewport and is
+        // never stale, unlike Tailwind percentages mid-flush on Android Chrome.
+        const container = containerRef.current!;
+        const stampContainer = () => {
+          container.style.width = window.innerWidth + "px";
+          container.style.height = window.innerHeight + "px";
+        };
+        stampContainer();
+
         // Spin up MindAR — this is the bridge between camera + Three.js
         const mindar = new MindARThree({
-          container: containerRef.current!,
+          container,
           imageTargetSrc: TARGET_PATH,
           uiScanning: "no", // we draw our own minimal HUD
           uiLoading: "no",
@@ -110,6 +121,23 @@ export default function ARScene() {
           mindar.stop();
           return;
         }
+
+        // Belt-and-suspenders: stamp + resize once more after start() resolves,
+        // in case layout had not yet settled when MindAR took its snapshot.
+        stampContainer();
+        mindar.resize();
+
+        // Android Chrome collapses the address bar AFTER first user interaction,
+        // which changes window.innerHeight but only fires on visualViewport —
+        // NOT on window. MindAR's own listener (window.resize) misses this, so
+        // the canvas stays frozen at the pre-collapse height. Subscribe to both.
+        const onViewportChange = () => {
+          stampContainer();
+          mindar.resize();
+        };
+        window.addEventListener("resize", onViewportChange);
+        window.visualViewport?.addEventListener("resize", onViewportChange);
+
         setStatus("scanning");
 
         // Render loop: rotate, render, optionally publish.
@@ -132,6 +160,8 @@ export default function ARScene() {
 
         cleanupRef.current = () => {
           renderer.setAnimationLoop(null);
+          window.removeEventListener("resize", onViewportChange);
+          window.visualViewport?.removeEventListener("resize", onViewportChange);
           unsubscribe();
           mindar.stop();
           renderer.dispose();
@@ -173,7 +203,7 @@ export default function ARScene() {
   return (
     <div className="fixed inset-0 bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
-      <div ref={containerRef} className="absolute top-0 left-0 w-full h-full overflow-hidden" />
+      <div ref={containerRef} className="absolute top-0 left-0 w-full h-full overflow-hidden isolate" />
 
       {/* Top HUD — status pill + presence */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-5 pt-[max(env(safe-area-inset-top),1rem)]">
