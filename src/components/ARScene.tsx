@@ -45,13 +45,14 @@ export default function ARScene() {
       setStatus("starting");
 
       try {
-        // Pin the container to authoritative visual-viewport pixels before
-        // MindAR snapshots r.clientWidth/Height inside its internal resize().
-        // window.innerWidth/Height is the post-layout visual viewport and is
-        // never stale, unlike Tailwind percentages mid-flush on Android Chrome.
+        // Hardcode the Samsung Galaxy S22 Ultra CSS viewport width (384 px,
+        // devicePixelRatio 3.75). window.innerWidth was returning a stale or
+        // wrong value at snapshot time, so we bypass it entirely.
+        // Height stays dynamic because the address-bar collapse changes it.
+        const S22_ULTRA_WIDTH = 384;
         const container = containerRef.current!;
         const stampContainer = () => {
-          container.style.width = window.innerWidth + "px";
+          container.style.width = S22_ULTRA_WIDTH + "px";
           container.style.height = window.innerHeight + "px";
         };
         stampContainer();
@@ -203,7 +204,7 @@ export default function ARScene() {
   return (
     <div className="fixed inset-0 bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
-      <div ref={containerRef} className="absolute top-0 left-0 w-full h-full overflow-hidden isolate" />
+      <div ref={containerRef} className="absolute top-0 left-0 w-[384px] h-full overflow-hidden isolate" />
 
       {/* Top HUD — status pill + presence */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-5 pt-[max(env(safe-area-inset-top),1rem)]">
