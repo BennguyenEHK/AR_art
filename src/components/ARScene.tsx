@@ -72,6 +72,7 @@ export default function ARScene() {
           placed = gltf.scene;
           placed.scale.setScalar(0.5); // reasonable default for a board-sized print
           placed.position.y = 0.0;
+          placed.rotation.x = -Math.PI / 2;
         } catch {
           // Soft-glowing icosahedron — recognizable as "placeholder" without being ugly
           if (mounted) setUsedFallbackModel(true);
@@ -170,9 +171,9 @@ export default function ARScene() {
   })();
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black">
+    <div className="fixed inset-0 bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
-      <div ref={containerRef} className="absolute inset-0 isolate" />
+      <div ref={containerRef} className="fixed inset-0 overflow-hidden isolate" />
 
       {/* Top HUD — status pill + presence */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-5 pt-[max(env(safe-area-inset-top),1rem)]">
