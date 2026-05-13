@@ -173,7 +173,7 @@ export default function ARScene() {
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
-      <div ref={containerRef} className="absolute inset-0" />
+      <div ref={containerRef} className="absolute inset-0 isolate" />
 
       {/* Top HUD — status pill + presence */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-5 pt-[max(env(safe-area-inset-top),1rem)]">
