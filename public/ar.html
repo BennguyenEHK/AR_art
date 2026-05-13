@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>AR Tree</title>
+
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      overflow: hidden;
+    }
+
+    a-scene {
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: rgba(250, 220, 140, 0.8);
+      font-family: monospace;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+
+    #loading-spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid rgba(250, 220, 140, 0.2);
+      border-top-color: rgba(250, 220, 140, 0.8);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* HUD */
+    #hud {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding-top: max(env(safe-area-inset-top), 1rem);
+      padding-left: 1rem;
+      padding-right: 1rem;
+      padding-bottom: 0.5rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Pill shared style */
+    .pill {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
+      padding: 8px 16px;
+      font-family: monospace;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #status-pill {
+      color: rgba(250, 220, 140, 0.8);
+    }
+
+    #status-dot {
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    /* Bottom bar */
+    #bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+      padding-left: 1rem;
+      padding-right: 1rem;
+      padding-top: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #hint-pill {
+      color: rgba(250, 220, 140, 0.6);
+    }
+
+    #back-pill {
+      color: rgba(255, 255, 255, 0.55);
+      text-decoration: none;
+    }
+
+    #back-pill:hover {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay">
+    <div id="loading-spinner"></div>
+    <span>initialising ar</span>
+  </div>
+
+  <!-- HUD pill -->
+  <div id="hud">
+    <div id="status-pill" class="pill">
+      <span id="status-dot">↻</span>
+      <span id="status-text">starting</span>
+    </div>
+  </div>
+
+  <!-- Bottom bar: hint + back link -->
+  <div id="bottom-bar">
+    <div id="hint-pill" class="pill">
+      point camera at hiro marker
+    </div>
+    <a id="back-pill" class="pill" href="/">← home</a>
+  </div>
+
+  <!-- A-Frame scene -->
+  <a-scene
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true; antialias: true"
+    embedded
+    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false"
+    id="ar-scene"
+  >
+    <a-assets>
+      <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
+    </a-assets>
+
+    <a-marker preset="hiro" id="hiro-marker">
+      <a-entity
+        gltf-model="#tree-model"
+        scale="0.5 0.5 0.5"
+        position="0 0 0"
+        rotation="-90 0 0"
+      ></a-entity>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    (function () {
+      var scene   = document.getElementById('ar-scene');
+      var marker  = document.getElementById('hiro-marker');
+      var overlay = document.getElementById('loading-overlay');
+      var dot     = document.getElementById('status-dot');
+      var text    = document.getElementById('status-text');
+      var pill    = document.getElementById('status-pill');
+      var hint    = document.getElementById('hint-pill');
+
+      function setScanning() {
+        dot.textContent = '○';
+        text.textContent = 'scanning';
+        pill.style.color = 'rgba(250,220,140,0.8)';
+        hint.classList.remove('hidden');
+      }
+
+      function setLocked() {
+        dot.textContent = '●';
+        text.textContent = 'locked';
+        pill.style.color = '#86efac';
+        hint.classList.add('hidden');
+      }
+
+      scene.addEventListener('loaded', function () {
+        overlay.classList.add('hidden');
+        setScanning();
+      });
+
+      marker.addEventListener('markerFound', function () {
+        setLocked();
+      });
+
+      marker.addEventListener('markerLost', function () {
+        setScanning();
+      });
+    })();
+  </script>
+
+</body>
+</html>
