@@ -113,7 +113,6 @@ export default function ARScene() {
 
         // Render loop: rotate, render, optionally publish.
         renderer.setAnimationLoop(() => {
-          yaw += 0.005;
           placed.rotation.y = yaw;
           renderer.render(threeScene, camera);
 
@@ -171,7 +170,7 @@ export default function ARScene() {
   })();
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black">
+    <div className="fixed inset-0 overflow-hidden bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
       <div ref={containerRef} className="absolute inset-0 isolate" />
 
