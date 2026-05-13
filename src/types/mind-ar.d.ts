@@ -34,6 +34,5 @@ declare module "mind-ar/dist/mindar-image-three.prod.js" {
     addAnchor(targetIndex: number): MindARThreeAnchor;
     start(): Promise<void>;
     stop(): void;
-    resize(): void;
   }
 }

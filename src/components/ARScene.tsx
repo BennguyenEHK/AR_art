@@ -45,22 +45,9 @@ export default function ARScene() {
       setStatus("starting");
 
       try {
-        // Pin the container to the exact visual-viewport size before MindAR
-        // reads clientWidth/Height in its internal resize(). On Android Chrome,
-        // fixed-position layout may not be flushed when the loadedmetadata
-        // callback fires, so CSS alone gives a stale value. window.innerWidth
-        // is always authoritative.
-        const container = containerRef.current!;
-        const syncSize = () => {
-          container.style.width  = window.innerWidth  + 'px';
-          container.style.height = window.innerHeight + 'px';
-        };
-        syncSize();
-        window.addEventListener('resize', syncSize);
-
         // Spin up MindAR — this is the bridge between camera + Three.js
         const mindar = new MindARThree({
-          container,
+          container: containerRef.current!,
           imageTargetSrc: TARGET_PATH,
           uiScanning: "no", // we draw our own minimal HUD
           uiLoading: "no",
@@ -123,35 +110,10 @@ export default function ARScene() {
           mindar.stop();
           return;
         }
-        // Belt-and-suspenders: after start() resolves, force MindAR to re-read
-        // the now-settled container dimensions via its own resize listener.
-        window.dispatchEvent(new Event('resize'));
         setStatus("scanning");
-
-        // Self-healing fullscreen guard. Every frame: if the WebGL canvas
-        // doesn't match window.innerWidth/Height, force the container to
-        // those exact pixels and re-run MindAR's resize(). This recovers
-        // from any wrong initial measurement (Android Chrome address-bar
-        // collapse, layout-flush race, Tailwind v4 inset utility quirks)
-        // on the very next animation frame. Once stable, the check is
-        // a no-op pair of `===` comparisons — effectively free.
-        let lastW = -1;
-        let lastH = -1;
-        const ensureFullScreen = () => {
-          const w = window.innerWidth;
-          const h = window.innerHeight;
-          const canvas = renderer.domElement;
-          if (canvas.clientWidth === w && canvas.clientHeight === h && w === lastW && h === lastH) return;
-          container.style.width  = w + 'px';
-          container.style.height = h + 'px';
-          mindar.resize();
-          lastW = w;
-          lastH = h;
-        };
 
         // Render loop: rotate, render, optionally publish.
         renderer.setAnimationLoop(() => {
-          ensureFullScreen();
           placed.rotation.y = yaw;
           renderer.render(threeScene, camera);
 
@@ -173,7 +135,6 @@ export default function ARScene() {
           unsubscribe();
           mindar.stop();
           renderer.dispose();
-          window.removeEventListener('resize', syncSize);
         };
       } catch (e: unknown) {
         if (!mounted) return;
@@ -212,7 +173,7 @@ export default function ARScene() {
   return (
     <div className="fixed inset-0 bg-black">
       {/* MindAR mounts the camera <video> + WebGL <canvas> into here */}
-      <div ref={containerRef} className="fixed inset-0 overflow-hidden isolate" />
+      <div ref={containerRef} className="fixed top-0 left-0 w-[90vw] h-[80vh] overflow-hidden isolate" />
 
       {/* Top HUD — status pill + presence */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 px-5 pt-[max(env(safe-area-inset-top),1rem)]">
