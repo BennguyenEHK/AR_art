@@ -128,8 +128,30 @@ export default function ARScene() {
         window.dispatchEvent(new Event('resize'));
         setStatus("scanning");
 
+        // Self-healing fullscreen guard. Every frame: if the WebGL canvas
+        // doesn't match window.innerWidth/Height, force the container to
+        // those exact pixels and re-run MindAR's resize(). This recovers
+        // from any wrong initial measurement (Android Chrome address-bar
+        // collapse, layout-flush race, Tailwind v4 inset utility quirks)
+        // on the very next animation frame. Once stable, the check is
+        // a no-op pair of `===` comparisons — effectively free.
+        let lastW = -1;
+        let lastH = -1;
+        const ensureFullScreen = () => {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const canvas = renderer.domElement;
+          if (canvas.clientWidth === w && canvas.clientHeight === h && w === lastW && h === lastH) return;
+          container.style.width  = w + 'px';
+          container.style.height = h + 'px';
+          mindar.resize();
+          lastW = w;
+          lastH = h;
+        };
+
         // Render loop: rotate, render, optionally publish.
         renderer.setAnimationLoop(() => {
+          ensureFullScreen();
           placed.rotation.y = yaw;
           renderer.render(threeScene, camera);
 
