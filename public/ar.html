@@ -158,20 +158,18 @@
 
   <!-- A-Frame scene -->
   <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs="debugUIEnabled: false;"
+    embedded arjs
     id="ar-scene"
   >
-    <a-assets timeout="10000">
+    <!-- <a-assets timeout="10000">
       <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
-    </a-assets>
+    </a-assets> -->
 
     <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
       <a-entity
-        gltf-model="https://raw.githack.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex/scene.gltf"
-        scale="0.05 0.05 0.05"
         position="0 0 0"
+        scale="0.05 0.05 0.05"
+        gltf-model="https://raw.githack.com/AR-js-org/AR.js/master/aframe/examples/image-tracking/nft/trex/scene.gltf"
       ></a-entity>
     </a-marker>
 
