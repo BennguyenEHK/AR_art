@@ -20,11 +20,6 @@
       overflow: hidden;
     }
 
-    a-scene {
-      width: 100vw;
-      height: 100vh;
-    }
-
     /* Loading overlay */
     #loading-overlay {
       position: fixed;
@@ -158,14 +153,15 @@
 
   <!-- A-Frame scene -->
   <a-scene
-    embedded arjs
+    vr-mode-ui="enabled: false"
+    arjs
     id="ar-scene"
   >
     <!-- <a-assets timeout="10000">
       <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
     </a-assets> -->
 
-    <a-marker preset="hiro" id="hiro-marker">
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="5" smoothTolerance="0.01">
       <a-entity
         position="0 0 0"
         rotation="0 0 0"
