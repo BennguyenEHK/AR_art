@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>AR Tree</title>
 
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
   <style>
     * {
@@ -151,7 +151,7 @@
   <!-- Bottom bar: hint + back link -->
   <div id="bottom-bar">
     <div id="hint-pill" class="pill">
-      point camera at barcode marker
+      point camera at hiro marker
     </div>
     <a id="back-pill" class="pill" href="/">← home</a>
   </div>
@@ -159,16 +159,15 @@
   <!-- A-Frame scene -->
   <a-scene
     vr-mode-ui="enabled: false"
-    renderer="antialias: true"
     embedded
-    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3_HAMMING63"
+    arjs="debugUIEnabled: false;"
     id="ar-scene"
   >
     <a-assets timeout="10000">
       <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
     </a-assets>
 
-    <a-marker type="barcode" value="1" matrixCodeType="3x3_HAMMING63" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
       <a-entity
         gltf-model="#tree-model"
         scale="0.5 0.5 0.5"
