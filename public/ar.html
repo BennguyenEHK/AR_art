@@ -151,7 +151,7 @@
   <!-- Bottom bar: hint + back link -->
   <div id="bottom-bar">
     <div id="hint-pill" class="pill">
-      point camera at hiro marker
+      point camera at barcode marker
     </div>
     <a id="back-pill" class="pill" href="/">← home</a>
   </div>
@@ -161,14 +161,14 @@
     vr-mode-ui="enabled: false"
     renderer="antialias: true"
     embedded
-    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono"
+    arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3_HAMMING63"
     id="ar-scene"
   >
     <a-assets timeout="10000">
       <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
     </a-assets>
 
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
+    <a-marker type="barcode" value="1" matrixCodeType="3x3_HAMMING63" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
       <a-entity
         gltf-model="#tree-model"
         scale="0.5 0.5 0.5"
