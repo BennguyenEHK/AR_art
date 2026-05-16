@@ -154,14 +154,16 @@
   <!-- A-Frame scene -->
   <a-scene
     vr-mode-ui="enabled: false"
+    embedded
     arjs
     id="ar-scene"
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
   >
     <!-- <a-assets timeout="10000">
       <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
     </a-assets> -->
 
-    <a-marker preset="hiro" id="hiro-marker">
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
       <a-entity
         position="0 0 0"
         rotation="0 0 0"
