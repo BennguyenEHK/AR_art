@@ -17,7 +17,7 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
-  background: var(--ash);
+  background: transparent;
   overflow: hidden;
   width: 100%;
   height: 100%;
@@ -70,6 +70,28 @@ html, body {
   left: 0 !important;
   width: 100% !important;
   height: 100% !important;
+  z-index: 1 !important;
+  background: transparent !important;
+}
+
+/* Ensure the WebGL canvas itself has no opaque background */
+#ar-scene canvas {
+  background: transparent !important;
+}
+
+/* AR.js injects a <video> into <body> for the webcam feed.
+   Pin it to the viewport at z-index 0 (behind the canvas at z=1)
+   so the transparent WebGL pixels reveal the live camera image. */
+#arjs-video,
+video[id^="arjs"],
+body > video {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 0 !important;
+  object-fit: cover !important;
 }
 
 /* ── HUD top — 3-column: [souls] [scanning] [healing arc] ────────── */
@@ -281,6 +303,39 @@ html, body {
 .end-tagline.revealed {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ── Restart button ──────────────────────────────────────────────── */
+#restart-btn {
+  display: block;
+  margin: 2.4rem auto 0;
+  cursor: pointer;
+  border: 1px solid rgba(212, 168, 67, 0.22);
+  border-radius: 9999px;
+  padding: 10px 22px;
+  background: rgba(8, 6, 4, 0.45);
+  color: rgba(212, 168, 67, 0.45);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 1.2s ease, transform 1.2s ease, color 0.3s ease, border-color 0.3s ease;
+  pointer-events: none;
+}
+
+#restart-btn.revealed {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#restart-btn:hover {
+  color: var(--gold);
+  border-color: rgba(212, 168, 67, 0.65);
 }
 
 /* ── Utility ─────────────────────────────────────────────────────── */

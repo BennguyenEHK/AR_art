@@ -50,9 +50,17 @@
       const dt = (now - _lastTick) / 1000;
       _lastTick = now;
       const effective = Math.min(_state.userCount, MAX_USERS);
-      const rate = effective * PER_USER_RATE;
-      _state.percent = Math.min(100, _state.percent + rate * dt);
-      _channel.publish('healing-state', { percent: _state.percent, userCount: _state.userCount });
+      // (b) Decay when nobody present; increase when users are here
+      if (effective <= 0) {
+        _state.percent = Math.max(0, _state.percent - PER_USER_RATE * dt);
+      } else {
+        _state.percent = Math.min(100, _state.percent + effective * PER_USER_RATE * dt);
+      }
+      _channel.publish('healing-state', {
+        percent: _state.percent,
+        userCount: _state.userCount,
+        t: Date.now()
+      });
       emitUpdate();
       if (_state.percent >= 100 && !_healingComplete) triggerComplete();
     }, 1000);
@@ -75,8 +83,15 @@
     document.dispatchEvent(new CustomEvent('healing-complete'));
   }
 
+  // (b) Calculate retroactive decay for state published when no leader was ticking.
+  // 2 s grace period covers the 1 s tick interval + network latency.
+  function applyRetroactiveDecay(percent, t) {
+    if (!t) return percent;
+    const idleSec = Math.max(0, (Date.now() - t) / 1000 - 2);
+    return idleSec > 0 ? Math.max(0, percent - PER_USER_RATE * idleSec) : percent;
+  }
+
   function runLocalFallback() {
-    // No Ably: simulate 1 user locally
     _state.userCount = 1;
     const interval = setInterval(() => {
       if (_state.percent >= 100) { clearInterval(interval); if (!_healingComplete) triggerComplete(); return; }
@@ -94,24 +109,59 @@
       _realtime = new Ably.Realtime({ key: config.ablyKey, clientId: _clientId });
       _channel = _realtime.channels.get(config.channelName, { params: { rewind: '1' } });
 
-      // Subscribe to state updates from leader
+      // Sync healing state from leader (or from rewind on first join)
       _channel.subscribe('healing-state', (msg) => {
         if (!msg.data) return;
-        const { percent, userCount } = msg.data;
-        // Take max of received vs local (handles network jitter)
-        if (percent > _state.percent) _state.percent = percent;
-        _state.userCount = userCount;
+        const { percent, userCount, t } = msg.data;
+        const staleSec = t ? (Date.now() - t) / 1000 : 0;
+
+        if (staleSec > 3) {
+          // (b) Stale message means no leader was ticking — apply retroactive decay
+          _state.percent = applyRetroactiveDecay(percent, t);
+        } else {
+          // Fresh: take max to handle out-of-order delivery
+          if (percent > _state.percent) _state.percent = percent;
+          if (userCount !== undefined) _state.userCount = userCount;
+        }
+
         emitUpdate();
         if (_state.percent >= 100 && !_healingComplete) triggerComplete();
       });
 
-      // Presence setup
+      // (a) All clients reload when a reset is broadcast
+      _channel.subscribe('healing-reset', () => {
+        setTimeout(() => window.location.reload(), 600);
+      });
+
       await _channel.presence.enter({ joinedAt: Date.now() });
       _channel.presence.subscribe(() => checkLeadership());
       await checkLeadership();
+
+      // (b) Abandonment marker: last user leaving publishes userCount=0 + timestamp
+      // so the next visitor can compute retroactive decay via rewind
+      window.addEventListener('beforeunload', () => {
+        if (_isLeader && _state.userCount <= 1 && _state.phase === 'healing') {
+          try {
+            _channel.publish('healing-state', {
+              percent: _state.percent,
+              userCount: 0,
+              t: Date.now()
+            });
+          } catch(_e) {}
+        }
+      });
     },
 
     getState() { return { ..._state }; },
+
+    // (a) Broadcast reset to all connected clients then reload
+    reset() {
+      if (_channel) {
+        _channel.publish('healing-reset', { t: Date.now() });
+        _channel.publish('healing-state', { percent: 0, userCount: _state.userCount, t: Date.now() });
+      }
+      setTimeout(() => window.location.reload(), 400);
+    },
 
     destroy() {
       stopLeaderTick();
