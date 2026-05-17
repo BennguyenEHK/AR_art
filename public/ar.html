@@ -3,243 +3,191 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>AR Tree</title>
-
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      background: #000;
-      overflow: hidden;
-    }
-
-    /* Loading overlay */
-    #loading-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: #000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: rgba(250, 220, 140, 0.8);
-      font-family: monospace;
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-    }
-
-    #loading-spinner {
-      width: 32px;
-      height: 32px;
-      border: 2px solid rgba(250, 220, 140, 0.2);
-      border-top-color: rgba(250, 220, 140, 0.8);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* HUD */
-    #hud {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      padding-top: max(env(safe-area-inset-top), 1rem);
-      padding-left: 1rem;
-      padding-right: 1rem;
-      padding-bottom: 0.5rem;
-      display: flex;
-      justify-content: center;
-    }
-
-    /* Pill shared style */
-    .pill {
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 9999px;
-      padding: 8px 16px;
-      font-family: monospace;
-      font-size: 11px;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    #status-pill {
-      color: rgba(250, 220, 140, 0.8);
-    }
-
-    #status-dot {
-      font-size: 10px;
-      line-height: 1;
-    }
-
-    /* Bottom bar */
-    #bottom-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      padding-bottom: max(env(safe-area-inset-bottom), 1rem);
-      padding-left: 1rem;
-      padding-right: 1rem;
-      padding-top: 0.5rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-
-    #hint-pill {
-      color: rgba(250, 220, 140, 0.6);
-    }
-
-    #back-pill {
-      color: rgba(255, 255, 255, 0.55);
-      text-decoration: none;
-    }
-
-    #back-pill:hover {
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-  </style>
+  <title>The Power of Many — AR</title>
+  <link rel="stylesheet" href="ar.css" />
 </head>
 <body>
 
   <!-- Loading overlay -->
   <div id="loading-overlay">
     <div id="loading-spinner"></div>
-    <span>initialising ar</span>
+    <span>preparing the witness</span>
   </div>
 
-  <!-- HUD pill -->
-  <div id="hud">
-    <div id="status-pill" class="pill">
-      <span id="status-dot">↻</span>
-      <span id="status-text">starting</span>
+  <!-- HUD top: status -->
+  <div id="hud-top">
+    <div id="status-pill" class="hud-pill">
+      <span id="status-dot">○</span>
+      <span id="status-text">scanning</span>
     </div>
   </div>
 
-  <!-- Bottom bar: hint + back link -->
-  <div id="bottom-bar">
-    <div id="hint-pill" class="pill">
-      point camera at hiro marker
-    </div>
-    <a id="back-pill" class="pill" href="/">← home</a>
+  <!-- Healing arc (bottom-right) -->
+  <div id="healing-hud">
+    <svg id="healing-arc" viewBox="0 0 44 44">
+      <circle id="arc-bg" cx="22" cy="22" r="18" />
+      <circle id="arc-progress" cx="22" cy="22" r="18" />
+      <text id="arc-percent" x="22" y="22">0%</text>
+    </svg>
+    <div id="arc-label">healing</div>
   </div>
 
-  <!-- A-Frame scene -->
+  <!-- User count (bottom-left) -->
+  <div id="user-count-pill" class="hud-pill">
+    <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
+    <span id="user-count-text">1 soul present</span>
+  </div>
+
+  <!-- HUD bottom: hint + back -->
+  <div id="hud-bottom">
+    <div id="hint-pill" class="hud-pill">point camera at hiro marker</div>
+    <a id="back-pill" class="hud-pill" href="/">← return</a>
+  </div>
+
+  <!-- End message overlay -->
+  <div id="end-overlay">
+    <div class="end-message">
+      <div class="end-line" data-delay="400">With many people speaking up —</div>
+      <div class="end-line" data-delay="1800">gun violence will be under control</div>
+      <div class="end-line" data-delay="3200">and reduced significantly.</div>
+      <div class="end-separator" data-delay="4400"></div>
+      <div class="end-tagline" data-delay="4800">The power of many.</div>
+    </div>
+  </div>
+
+  <!-- Scripts: defer Ably so it doesn't block A-Frame init; pin AR.js to stable 3.4.5 -->
+  <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+  <!-- Custom components MUST be registered before <a-scene> is parsed -->
+  <script src="js/components.js"></script>
+  <script src="js/healing-sync.js"></script>
+  <script src="js/end-sequence.js"></script>
+
+  <!-- A-Frame scene: no `embedded` (AR.js manages full-viewport), explicit arjs params -->
   <a-scene
-    vr-mode-ui="enabled: false"
-    embedded
-    arjs
     id="ar-scene"
-    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+    vr-mode-ui="enabled: false"
+    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; debugUIEnabled: false"
   >
-    <a-assets timeout="10000">
-      <a-asset-item id="tree-model" src="/models/Tree.glb"></a-asset-item>
-    </a-assets>
+    <!-- Lighting: required for MeshStandardMaterial to render with color -->
+    <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="10" smoothTolerance="0.01">
+    <!-- smoothTolerance raised from 0.01→0.05: 0.01 was too tight for handheld jitter -->
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="5" smoothTolerance="0.05">
+
+      <!-- Main character -->
       <a-entity
+        id="character-root"
+        character-animator="healingPercent: 0; mode: a"
         position="0 0 0"
-        rotation="0 0 0"
-        scale="1 1 1"
-        gltf-model="#tree-model"
       ></a-entity>
+
+      <!-- Environmental effects -->
+      <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+
     </a-marker>
 
-    <a-entity camera></a-entity>
+    <!-- No <a-entity camera> — AR.js injects its own camera; a manual one causes conflicts -->
   </a-scene>
 
   <script>
     (function () {
-      var scene   = document.getElementById('ar-scene');
-      var marker  = document.getElementById('hiro-marker');
-      var overlay = document.getElementById('loading-overlay');
-      var dot     = document.getElementById('status-dot');
-      var text    = document.getElementById('status-text');
-      var pill    = document.getElementById('status-pill');
-      var hint    = document.getElementById('hint-pill');
+      const scene   = document.getElementById('ar-scene');
+      const marker  = document.getElementById('hiro-marker');
+      const overlay = document.getElementById('loading-overlay');
+      const statusPill = document.getElementById('status-pill');
+      const statusDot  = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+      const hintPill   = document.getElementById('hint-pill');
+      const arcProgress = document.getElementById('arc-progress');
+      const arcPercent  = document.getElementById('arc-percent');
+      const arcSvg      = document.getElementById('healing-arc');
+      const userCountText = document.getElementById('user-count-text');
+
+      const ARC_CIRCUMFERENCE = 2 * Math.PI * 18; // r=18 → 113.097
 
       function setScanning() {
-        dot.textContent = '○';
-        text.textContent = 'scanning';
-        pill.style.color = 'rgba(250,220,140,0.8)';
-        hint.classList.remove('hidden');
+        statusDot.textContent = '○';
+        statusText.textContent = 'scanning';
+        statusPill.className = 'hud-pill scanning';
+        hintPill.classList.remove('hidden');
       }
 
       function setLocked() {
-        dot.textContent = '●';
-        text.textContent = 'locked';
-        pill.style.color = '#86efac';
-        hint.classList.add('hidden');
+        statusDot.textContent = '●';
+        statusText.textContent = 'locked';
+        statusPill.className = 'hud-pill locked';
+        hintPill.classList.add('hidden');
       }
 
+      function updateHealingArc(percent) {
+        const filled = (percent / 100) * ARC_CIRCUMFERENCE;
+        arcProgress.style.strokeDasharray = filled + ' ' + ARC_CIRCUMFERENCE;
+        arcPercent.textContent = Math.round(percent) + '%';
+
+        // Color lerp: ember (#c4622d) → gold (#d4a843)
+        const t = percent / 100;
+        const r = Math.round(196 + (212 - 196) * t);
+        const g = Math.round(98  + (168 - 98)  * t);
+        const b = Math.round(45  + (67  - 45)  * t);
+        arcProgress.style.stroke = `rgb(${r},${g},${b})`;
+        arcPercent.style.fill = percent > 50
+          ? `rgba(212, 168, 67, ${0.4 + t * 0.4})`
+          : 'rgba(240, 228, 200, 0.38)';
+
+        // Glow toggles correctly in both directions
+        arcSvg.classList.toggle('glowing', percent > 40);
+      }
+
+      function updateUserCount(count) {
+        userCountText.textContent = count === 1
+          ? '1 soul present'
+          : count + ' souls present';
+      }
+
+      // Listen for healing updates from healing-sync.js
+      document.addEventListener('healing-update', function(e) {
+        const { percent, userCount } = e.detail;
+
+        // Update healing arc
+        updateHealingArc(percent);
+        updateUserCount(userCount);
+
+        // Update all effect intensities (1 → 0 as healing progresses)
+        const intensity = Math.max(0, 1 - percent / 100);
+
+        const tornado   = document.querySelector('[tornado-effect]');
+        const wire      = document.querySelector('[barbed-wire]');
+        const explosion = document.querySelector('[explosion-flash]');
+        const character = document.getElementById('character-root');
+
+        if (tornado)   tornado.setAttribute('tornado-effect', 'intensity', intensity);
+        if (wire)      wire.setAttribute('barbed-wire', 'intensity', intensity);
+        if (explosion) explosion.setAttribute('explosion-flash', 'intensity', intensity);
+        if (character) character.setAttribute('character-animator', 'healingPercent', percent);
+      });
+
+      // Scene load handler
       scene.addEventListener('loaded', function () {
-        overlay.classList.add('hidden');
+        // Fade out loading overlay
+        overlay.classList.add('fade-out');
+        setTimeout(() => overlay.classList.add('hidden'), 900);
         setScanning();
 
-        // A-Frame 1.6.0 resets camera.projectionMatrix via updateProjectionMatrix()
-        // whenever the camera component updates, overriding AR.js's calibrated matrix.
-        // We intercept the first write AR.js makes (.copy / .fromArray), keep the
-        // inverse in sync, then permanently block the reset.
-        var cam = scene.camera;
-        var locked = false;
-
-        function onARjsWrite() {
-          cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
-          if (!locked) {
-            locked = true;
-            cam.updateProjectionMatrix = function () {};
-          }
+        // Start healing sync after scene is ready
+        // HealingSync.init() is deferred until Ably CDN has loaded (scene.loaded fires well after)
+        if (window.HealingSync) {
+          window.HealingSync.init().catch(console.error);
         }
-
-        var _copy = cam.projectionMatrix.copy.bind(cam.projectionMatrix);
-        cam.projectionMatrix.copy = function (m) { _copy(m); onARjsWrite(); };
-
-        var _fromArray = cam.projectionMatrix.fromArray.bind(cam.projectionMatrix);
-        cam.projectionMatrix.fromArray = function (a, o) { _fromArray(a, o); onARjsWrite(); };
       });
 
-      marker.addEventListener('markerFound', function () {
-        setLocked();
-      });
+      marker.addEventListener('markerFound', setLocked);
+      marker.addEventListener('markerLost', setScanning);
 
-      marker.addEventListener('markerLost', function () {
-        setScanning();
-      });
-
-      var modelEl = marker.querySelector('[gltf-model]');
-      modelEl.addEventListener('model-error', function (e) {
-        console.error('GLTF load failed:', e.detail);
-        text.textContent = 'model error';
-        dot.textContent  = '✕';
-        pill.style.color = '#f87171';
-      });
     })();
   </script>
 
