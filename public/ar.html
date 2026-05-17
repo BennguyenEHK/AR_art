@@ -65,6 +65,7 @@
   <a-scene
     id="ar-scene"
     embedded
+    renderer="antialias: true; alpha: true"
     vr-mode-ui="enabled: false"
     arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; debugUIEnabled: false"
   >
@@ -79,7 +80,8 @@
       <a-entity
         id="character-root"
         character-animator="healingPercent: 0; mode: a"
-        position="0 0 0"
+        position="0 0 0.15"
+        rotation="0 -30 0"
       ></a-entity>
 
       <!-- Environmental effects -->
