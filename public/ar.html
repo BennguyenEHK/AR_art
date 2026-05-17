@@ -14,28 +14,24 @@
     <span>preparing the witness</span>
   </div>
 
-  <!-- HUD top: status -->
+  <!-- HUD top: [souls ←] [scanning center] [→ healing arc] -->
   <div id="hud-top">
+    <div id="user-count-pill" class="hud-pill">
+      <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
+      <span id="user-count-text">1 soul present</span>
+    </div>
     <div id="status-pill" class="hud-pill">
       <span id="status-dot">○</span>
       <span id="status-text">scanning</span>
     </div>
-  </div>
-
-  <!-- Healing arc (bottom-right) -->
-  <div id="healing-hud">
-    <svg id="healing-arc" viewBox="0 0 44 44">
-      <circle id="arc-bg" cx="22" cy="22" r="18" />
-      <circle id="arc-progress" cx="22" cy="22" r="18" />
-      <text id="arc-percent" x="22" y="22">0%</text>
-    </svg>
-    <div id="arc-label">healing</div>
-  </div>
-
-  <!-- User count (bottom-left) -->
-  <div id="user-count-pill" class="hud-pill">
-    <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
-    <span id="user-count-text">1 soul present</span>
+    <div id="healing-hud">
+      <svg id="healing-arc" viewBox="0 0 44 44">
+        <circle id="arc-bg" cx="22" cy="22" r="18" />
+        <circle id="arc-progress" cx="22" cy="22" r="18" />
+        <text id="arc-percent" x="22" y="22">0%</text>
+      </svg>
+      <div id="arc-label">healing</div>
+    </div>
   </div>
 
   <!-- HUD bottom: hint + back -->
@@ -64,9 +60,11 @@
   <script src="js/healing-sync.js"></script>
   <script src="js/end-sequence.js"></script>
 
-  <!-- A-Frame scene: no `embedded` (AR.js manages full-viewport), explicit arjs params -->
+  <!-- A-Frame scene: `embedded` is REQUIRED for AR.js to composite the camera video correctly
+       on mobile Chrome. Without it: black screen + VR button appears regardless of vr-mode-ui. -->
   <a-scene
     id="ar-scene"
+    embedded
     vr-mode-ui="enabled: false"
     arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; debugUIEnabled: false"
   >

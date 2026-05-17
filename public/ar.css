@@ -61,18 +61,27 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── A-Frame scene ───────────────────────────────────────────────── */
-/* Without `embedded`, AR.js manages full-viewport layout itself.
-   No override needed — forcing position:fixed caused video/canvas size mismatch. */
+/* `embedded` is set on <a-scene>. AR.js no longer fullscreens itself, so we must
+   manually pin the canvas to the viewport. Without this the canvas collapses and
+   the camera video is invisible behind the body background. */
+#ar-scene {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
 
-/* ── HUD top ─────────────────────────────────────────────────────── */
+/* ── HUD top — 3-column: [souls] [scanning] [healing arc] ────────── */
 #hud-top {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
-  padding-top: max(env(safe-area-inset-top), 1rem);
-  padding: max(env(safe-area-inset-top), 1rem) 1.2rem 0;
+  padding: max(env(safe-area-inset-top), 0.9rem) 1rem 0.6rem;
   display: flex;
-  justify-content: center;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
   pointer-events: none;
 }
 
@@ -154,22 +163,18 @@ html, body {
 
 #back-pill:hover { color: var(--text-warm); }
 
-/* ── Healing arc (SVG, bottom-right corner) ──────────────────────── */
+/* ── Healing arc — now inline in top HUD row (right slot) ────────── */
 #healing-hud {
-  position: fixed;
-  bottom: max(env(safe-area-inset-bottom), 1.2rem);
-  right: 1.2rem;
-  z-index: 101;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   pointer-events: none;
 }
 
 #healing-arc {
-  width: 72px;
-  height: 72px;
+  width: 44px;
+  height: 44px;
   filter: drop-shadow(0 0 4px rgba(196, 98, 45, 0));
   transition: filter 0.6s ease;
 }
@@ -207,12 +212,7 @@ html, body {
   text-align: center;
 }
 
-#user-count-pill {
-  position: fixed;
-  bottom: max(env(safe-area-inset-bottom), 1.2rem);
-  left: 1.2rem;
-  z-index: 101;
-}
+/* #user-count-pill — now inline left slot of #hud-top, no fixed positioning needed */
 
 /* ── End message overlay ─────────────────────────────────────────── */
 #end-overlay {
