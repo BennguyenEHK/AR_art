@@ -8,17 +8,27 @@
 
 iOS Safari does not support the WebXR Device API, and Chrome/Firefox/Edge on iOS inherit the same restriction (all WebKit underneath). The project's recent migration to WebXR hit-test (commit `e63e7b4`) therefore makes the AR experience **unreachable on iPhones and iPads**.
 
-The art installation requires a cross-platform AR path. Native AR (Apple Quick Look) is not viable because the project needs custom interactivity (tap-to-place, healing animations, multi-user sync). We are migrating the AR engine layer to **8th Wall (Niantic)**, which provides JS-based computer-vision SLAM over `getUserMedia` and runs on both iOS Safari and Android Chrome.
+The art installation requires a cross-platform AR path. Native AR (Apple Quick Look) is not viable because the project needs custom interactivity (tap-to-place, healing animations, multi-user sync). We are migrating the AR engine layer to the **open-source 8th Wall engine** (`@8thwall/engine-binary`), which provides JS-based computer-vision SLAM over `getUserMedia` and runs on both iOS Safari and Android Chrome.
+
+### Context: 8th Wall went open source
+
+Niantic shut down the 8th Wall hosted service on **2026-02-28**. New signups are closed, hosted projects are sunset by 2027-02-28. **However**, in January 2026 Niantic open-sourced the engine: the framework code is MIT-licensed at `github.com/8thwall/8thwall`, and the SLAM binary is distributed under a free binary-only license via npm as `@8thwall/engine-binary` (with a jsdelivr CDN mirror). For our use case this is strictly better than the original hosted product:
+
+- No App Key, no authorized domains, no device authorization
+- No subscription cost — ever
+- No vendor-shutdown risk (worst case already played out)
+- Same SLAM, same A-Frame component names (`xrweb`, `xrextras-*`)
 
 ## 2. Decisions (locked)
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Tracking mode | 8th Wall World Tracking (SLAM) | Matches current tap-to-place UX from WebXR hit-test. No printed marker needed. |
+| Tracking mode | 8th Wall OSS World Tracking (SLAM) | Matches current tap-to-place UX from WebXR hit-test. No printed marker needed. |
 | Multiplayer | Keep Ably | Cheaper, portable, no lock-in. Existing `healing-sync.js` keeps working. |
+| SDK source | `@8thwall/engine-binary` via jsdelivr CDN | Free, no signup, MIT framework + free binary SLAM. Loaded as a static `<script>` tag. |
 | SDK flavor | 8th Wall + A-Frame integration | Smallest migration diff. Keeps `<a-scene>`, components, HUD, end sequence. |
 | Hosting | Self-host on Vercel under project's own domain | One codebase. Next.js home page and AR page stay together. |
-| 8th Wall account | New workspace, Dev tier for build, paid tier at launch | User will create. App Key tied to authorized domains. |
+| App Key / accounts | None required | OSS distribution does not gate by domain or device. |
 | Migration shape | Big-bang swap of `ar.html` | Smallest diff. Old code preserved on `pre-8thwall` git tag for emergency revert. |
 
 ## 3. Architecture
@@ -53,7 +63,7 @@ The HUD layer talks to the AR engine only through DOM CustomEvents. The migratio
 
 ```
 public/
-├── ar.html                          [EDIT]   swap <a-scene> attrs + scripts + bootstrap
+├── ar.html                          [EDIT]   swap <a-scene> attrs + scripts
 ├── js/
 │   ├── webxr-placement.js           [DELETE] replaced
 │   ├── eighth-wall-placement.js     [NEW]    8th Wall engine adapter
@@ -65,10 +75,10 @@ public/
 ├── targets/board.mind               [DELETE] MindAR-specific, dead code
 └── models/                          [UNCHANGED]
 
-src/app/api/ar-config/route.ts       [EDIT]   add appKey to JSON response
+src/app/api/ar-config/route.ts       [UNCHANGED] no App Key needed
 src/app/ar/page.tsx                  [UNCHANGED] still redirects to /ar.html
-.env.local / .env.example            [EDIT]   add NEXT_PUBLIC_8THWALL_APP_KEY
-next.config.ts                       [EDIT]   CSP for apps.8thwall.com / cdn.8thwall.com
+.env.local / .env.example            [UNCHANGED] no new env var needed
+next.config.ts                       [EDIT]   CSP for cdn.jsdelivr.net
 ```
 
 ### 4.1 `public/ar.html` (edit)
@@ -80,13 +90,19 @@ next.config.ts                       [EDIT]   CSP for apps.8thwall.com / cdn.8th
 - `webxr-placement` component reference on `#placement-reticle`
 
 **Add:**
-- A tiny inline bootstrap that `fetch('/api/ar-config')`, then `<script>`-injects 8th Wall with the returned `appKey` and dispatches a `8thwall-ready` event when the SDK has registered its A-Frame components. A-Frame initialization is gated on this event so `xrweb` / `xrextras-*` attributes are recognized when `<a-scene>` is parsed.
-- `xrweb` system attribute on `<a-scene>` (e.g., `xrweb="enabled: true"`)
-- `xrextras-tap-recenter` for re-centering UX
+- A single static script tag for the OSS engine binary (loads from jsdelivr CDN, includes SLAM via the `data-preload-chunks` attribute):
+  ```html
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js"
+          async crossorigin="anonymous"
+          data-preload-chunks="slam"></script>
+  ```
+- A-Frame loaded after `XR8` (the SDK's global) is available — script ordering uses `defer` + a small ready check, no `fetch` or App Key required
+- `xrweb` system attribute on `<a-scene>` (e.g., `xrweb="allowedDevices: any"`)
+- `xrextras-tap-recenter`, `xrextras-loading`, `xrextras-runtime-error` for UX helpers
 - `<script src="js/eighth-wall-placement.js">`
 - `eighth-wall-placement` component on `#placement-reticle`
 
-The bootstrap reuses the existing `/api/ar-config` route pattern (already used by `healing-sync.js` for the Ably key), so there's a single env-config endpoint instead of two parallel mechanisms.
+Self-hosting note: if Niantic ever yanks the jsdelivr-mirrored package (very unlikely — it's an open-source binary), we can `npm install @8thwall/engine-binary` and serve `dist/xr.js` ourselves from `public/vendor/8thwall/`. Defer this until/unless that happens.
 
 **Keep:** the entry gateway (`#enter-gateway`) — 8th Wall still needs a user-gesture for `getUserMedia`, so the existing "tap to enter AR" button serves the same purpose. The gateway's *support check* changes: instead of `navigator.xr.isSessionSupported`, we feature-detect `getUserMedia` and let 8th Wall's own startup error reporting handle the rest.
 
@@ -105,68 +121,41 @@ A single A-Frame component mirroring the public contract of `webxr-placement`:
 
 ### 4.3 `next.config.ts` (edit)
 
-Add a `Content-Security-Policy` response header so 8th Wall's scripts load:
+Add a `Content-Security-Policy` response header so the OSS engine script loads:
 
 ```
-script-src 'self' apps.8thwall.com cdn.8thwall.com 'unsafe-eval' 'unsafe-inline';
-connect-src 'self' apps.8thwall.com cdn.8thwall.com *.ably.io wss://*.ably.io;
+script-src 'self' cdn.jsdelivr.net https://aframe.io https://cdn.ably.com 'unsafe-eval';
+connect-src 'self' cdn.jsdelivr.net *.ably.io wss://*.ably.io;
 worker-src 'self' blob:;
 img-src 'self' data: blob:;
 media-src 'self' blob:;
 ```
 
-`unsafe-eval` is required by 8th Wall's runtime VM. `'unsafe-inline'` is required for the small inline bootstrap that fetches `/api/ar-config` and injects the 8th Wall script tag. Scope this header to the AR page only (`source: '/ar.html'`) so the rest of the site keeps a stricter policy.
+`'unsafe-eval'` is required by 8th Wall's runtime VM (same as the hosted version — the requirement is in the engine itself, not the delivery mechanism). No `'unsafe-inline'` is needed because the SDK loads via a regular `<script src=...>` tag, not an inline bootstrap. Scope this header to the AR page only (`source: '/ar.html'`) so the rest of the site keeps a stricter policy.
 
-### 4.4 Env + App Key injection
+### 4.4 No env variable, no API key
 
-```
-.env.example:  NEXT_PUBLIC_8THWALL_APP_KEY=put-your-key-here
-.env.local:    NEXT_PUBLIC_8THWALL_APP_KEY=<the real key>
-```
+The OSS engine is anonymous — there is no key, no domain authorization, no device authorization. `/api/ar-config` is **not modified** for this migration; it keeps returning only the Ably config it already does. `.env.example` and `.env.local` gain no new entries.
 
-`src/app/api/ar-config/route.ts` is edited to include the App Key in the JSON it already returns:
-
-```ts
-return NextResponse.json({
-  ablyKey: process.env.NEXT_PUBLIC_ABLY_KEY ?? '',
-  channelName: process.env.NEXT_PUBLIC_ABLY_CHANNEL ?? 'ar-art:peace-board:v1',
-  ablyEnabled: process.env.NEXT_PUBLIC_ABLY_ENABLED === 'true',
-  appKey: process.env.NEXT_PUBLIC_8THWALL_APP_KEY ?? '',
-});
-```
-
-`ar.html` gains a small inline bootstrap at the top of `<head>`:
-
-```html
-<script>
-  fetch('/api/ar-config')
-    .then(r => r.json())
-    .then(cfg => {
-      if (!cfg.appKey) { window.dispatchEvent(new CustomEvent('8thwall-missing-key')); return; }
-      var s = document.createElement('script');
-      s.src = 'https://apps.8thwall.com/xrweb?appKey=' + encodeURIComponent(cfg.appKey);
-      s.onload = function () { window.dispatchEvent(new CustomEvent('8thwall-ready')); };
-      document.head.appendChild(s);
-    });
-</script>
-```
-
-Reuses the existing config endpoint. Single env-loading pattern in the codebase. No new build step.
+If `cdn.jsdelivr.net` becomes unreachable or undesirable, the fallback is `npm install @8thwall/engine-binary` + serve `dist/xr.js` from `public/vendor/8thwall/`. This is a one-line change to the `<script src=…>` in `ar.html`. Not done up front to avoid checking ~2 MB of vendored bundle into git.
 
 ## 5. Runtime data flow
 
 ### Page load
 ```
 /ar.html (static)
- ├─► inline bootstrap: fetch('/api/ar-config')
- │    └─► appends <script src="apps.8thwall.com/xrweb?appKey=..."> to <head>
- │         └─► onload → window dispatches '8thwall-ready'
- │              └─ A-Frame `xrweb` / `xrextras-*` components now registered
- ├─► <script src="https://aframe.io/.../aframe.min.js">
- ├─► <script src="js/components.js">   (character-animator, tornado, etc.)
- ├─► <script src="js/eighth-wall-placement.js">
- ├─► <script src="js/healing-sync.js">
- └─► <script src="js/end-sequence.js">
+ ├─► <script async src="cdn.jsdelivr.net/.../@8thwall/engine-binary/.../xr.js"
+ │            data-preload-chunks="slam">
+ │     └─ registers `xrweb`, `xrextras-*` A-Frame components on global XR8
+ ├─► <script defer src="https://aframe.io/.../aframe.min.js">
+ ├─► <script defer src="js/components.js">   (character-animator, tornado, etc.)
+ ├─► <script defer src="js/eighth-wall-placement.js">
+ ├─► <script defer src="js/healing-sync.js">
+ └─► <script defer src="js/end-sequence.js">
+
+window.onload waits for XR8 global to be defined (small ready-poll), then
+inserts <a-scene> into the DOM so A-Frame sees `xrweb` / `xrextras-*`
+attributes at parse time.
 ```
 
 ### Session start (the single user-gesture)
@@ -209,31 +198,22 @@ any user's local increment
 
 The boundary CustomEvents are unchanged — that is why HUD/multiplayer code touches zero lines.
 
-## 6. 8th Wall account setup (user actions, before code ships)
+## 6. Prerequisites (very short)
 
-1. Sign up at `8thwall.com` and create a workspace. Dev tier is enough to build and test.
-2. Create a project → choose type **"Self-Hosted"** (not "Hosted on 8th Wall").
-3. Copy the **App Key** from the project dashboard.
-4. Authorize domains for the App Key:
-   - `localhost`
-   - `*.vercel.app` (or the specific preview-URL pattern Vercel emits)
-   - Your production domain
-5. Authorize test devices — visit a one-time activation URL on each iPhone / Android you'll test with. Dev tier limits sessions to authorized devices.
-6. Paste the App Key into `.env.local` as `NEXT_PUBLIC_8THWALL_APP_KEY`. Commit `.env.example` with the placeholder.
+The OSS engine has no signup, no key, no console. The "setup" is reduced to two operational checks:
 
-At launch day, upgrade to a paid plan — that removes the device-authorization requirement. No code change required; the App Key stays the same.
+1. **Network reachability:** confirm `cdn.jsdelivr.net` is reachable from the test devices and from the gallery's installation network. Most networks let CDN traffic through, but corporate / gallery wifi sometimes doesn't — worth checking before the opening, not during.
+2. **HTTPS:** AR requires HTTPS for `getUserMedia`. `next dev --experimental-https` (already in `package.json`) gives HTTPS locally; Vercel gives HTTPS in prod. No extra work.
 
 ### Notes
-- **HTTPS / mixed content:** 8th Wall CDN is HTTPS. `next dev --experimental-https` (already in `package.json`) gives HTTPS locally. No mixed-content issue.
 - **iOS user-gesture rule:** iOS Safari only grants `getUserMedia` from a user gesture in the same document. The existing entry gateway (`#enter-gateway`) already satisfies this — same reason it was added for WebXR.
+- **Bundle size:** `xr.js` is ~2–3 MB minified+gzipped including the SLAM chunk. First load on a slow gallery wifi can take a few seconds — the "preparing the witness" overlay covers this.
 
 ## 7. Error handling
 
 | Failure | User-facing | Code path |
 |---|---|---|
-| App Key missing | `#ar-unsupported` with "AR not configured" | `config.js` writes empty key; bootstrap fails fast |
-| App Key wrong / domain unauthorized | 8th Wall's own error screen | Delegated to 8th Wall |
-| Device not authorized (Dev tier) | 8th Wall's "not authorized" screen with QR | Delegated to 8th Wall |
+| jsdelivr CDN unreachable (offline / blocked) | `#ar-unsupported` with "could not load AR engine" | `<script>` onerror → adapter shows overlay |
 | Camera permission denied | `#ar-unsupported` with "camera access required" | Adapter catches permissions-denied event |
 | Tracking lost mid-session | HUD pill returns to "scanning" | Adapter emits `surface-lost` → existing handler |
 | Ably disconnect | Existing healing-sync behavior | No change |
