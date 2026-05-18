@@ -310,10 +310,11 @@
   /* =========================================================================
    * 4. character-animator
    * =========================================================================
-   * Builds a full procedural 3D character entirely in Three.js.
-   * Mode A = war-zone soldier (sitting, wounded).
-   * Mode B = healing angel (standing, wings, halo, flies upward on complete).
-   * Transition: Mode A fades out while Mode B fades in, waits, then flies up.
+   * Loads pre-built GLB models for Mode A (war-zone soldier) and Mode B
+   * (healing angel).  All animation is JS-driven; the GLBs contain no clips.
+   * Node names expected in the GLBs: head, torso, arm_l, arm_r,
+   * upper_leg_l/r, lower_leg_l/r, gun_body, gun_barrel, wing_l, wing_r,
+   * halo.  wound_cracks is optional (present after Blender re-export).
    * ======================================================================= */
   AFRAME.registerComponent('character-animator', {
     schema: {
@@ -322,258 +323,7 @@
     },
 
     /* ------------------------------------------------------------------
-     * buildModeA — war-zone soldier sitting on the ground
-     * ------------------------------------------------------------------ */
-    buildModeA: function (group) {
-      var THREE = AFRAME.THREE;
-
-      var mk = function (geo, color, rough) {
-        if (rough === undefined) { rough = 1.0; }
-        return new THREE.Mesh(
-          geo,
-          new THREE.MeshStandardMaterial({ color: color, roughness: rough, metalness: 0 })
-        );
-      };
-
-      // Head
-      var head = mk(new THREE.SphereGeometry(0.12, 6, 5), 0x5c3d2e);
-      head.position.set(0, 0.68, 0.08);
-      head.rotation.x = 0.08;
-      group.add(head);
-      this.headMesh = head;
-
-      // Torso
-      var torso = mk(new THREE.BoxGeometry(0.30, 0.32, 0.18), 0x2a2218);
-      torso.position.set(0, 0.38, 0.02);
-      torso.rotation.x = -0.10;
-      group.add(torso);
-      this.torsoMesh = torso;
-
-      // Left upper leg
-      var leftUpperLeg = mk(new THREE.CylinderGeometry(0.085, 0.085, 0.28, 5), 0x2a2218);
-      leftUpperLeg.position.set(-0.1, 0.30, 0.25);
-      leftUpperLeg.rotation.set(-1.1, 0, 0.12);
-      group.add(leftUpperLeg);
-
-      // Right upper leg (mirror X)
-      var rightUpperLeg = mk(new THREE.CylinderGeometry(0.085, 0.085, 0.28, 5), 0x2a2218);
-      rightUpperLeg.position.set(0.1, 0.30, 0.25);
-      rightUpperLeg.rotation.set(-1.1, 0, -0.12);
-      group.add(rightUpperLeg);
-
-      // Left lower leg
-      var leftLowerLeg = mk(new THREE.CylinderGeometry(0.07, 0.07, 0.25, 5), 0x2a2218);
-      leftLowerLeg.position.set(-0.1, 0.14, 0.42);
-      leftLowerLeg.rotation.set(0.5, 0, 0.1);
-      group.add(leftLowerLeg);
-
-      // Right lower leg (mirror X)
-      var rightLowerLeg = mk(new THREE.CylinderGeometry(0.07, 0.07, 0.25, 5), 0x2a2218);
-      rightLowerLeg.position.set(0.1, 0.14, 0.42);
-      rightLowerLeg.rotation.set(0.5, 0, -0.1);
-      group.add(rightLowerLeg);
-
-      // Left arm
-      var leftArm = mk(new THREE.CylinderGeometry(0.065, 0.065, 0.26, 5), 0x5c3d2e);
-      leftArm.position.set(-0.20, 0.38, 0.18);
-      leftArm.rotation.set(0.8, 0, -0.5);
-      group.add(leftArm);
-
-      // Right arm (mirror X)
-      var rightArm = mk(new THREE.CylinderGeometry(0.065, 0.065, 0.26, 5), 0x5c3d2e);
-      rightArm.position.set(0.20, 0.38, 0.18);
-      rightArm.rotation.set(0.8, 0, 0.5);
-      group.add(rightArm);
-
-      // Gun body
-      var gunBody = mk(new THREE.BoxGeometry(0.16, 0.05, 0.05), 0x1a1a1a, 0.6);
-      gunBody.position.set(0.26, 0.30, 0.22);
-      gunBody.rotation.set(0.3, 0.3, 0.5);
-      group.add(gunBody);
-
-      // Gun barrel
-      var gunBarrel = mk(new THREE.BoxGeometry(0.035, 0.035, 0.12), 0x111111, 0.6);
-      gunBarrel.position.set(0.31, 0.27, 0.28);
-      gunBarrel.rotation.set(0.3, 0.3, 0.5);
-      group.add(gunBarrel);
-
-      // Wound cracks on face (LineSegments)
-      var crackPts = [
-        new THREE.Vector3( 0.02,  0.76,  0.14), new THREE.Vector3( 0.09,  0.71,  0.14),
-        new THREE.Vector3( 0.09,  0.71,  0.14), new THREE.Vector3( 0.12,  0.67,  0.12),
-        new THREE.Vector3( 0.05,  0.73,  0.14), new THREE.Vector3( 0.02,  0.68,  0.13),
-        new THREE.Vector3( 0.02,  0.69,  0.14), new THREE.Vector3(-0.03,  0.65,  0.12)
-      ];
-      var crackGeo = new THREE.BufferGeometry().setFromPoints(crackPts);
-      this.crackMat   = new THREE.LineBasicMaterial({ color: 0x8b2020, transparent: true, opacity: 1.0 });
-      this.crackLines = new THREE.LineSegments(crackGeo, this.crackMat);
-      group.add(this.crackLines);
-    },
-
-    /* ------------------------------------------------------------------
-     * buildModeB — healing angel standing upright
-     * ------------------------------------------------------------------ */
-    buildModeB: function (group) {
-      var THREE = AFRAME.THREE;
-      this.modeBMeshes = [];
-
-      var self = this;
-      var mkB = function (geo, color, emissive, eI) {
-        if (emissive === undefined) { emissive = 0x000000; }
-        if (eI       === undefined) { eI       = 0; }
-        var mesh = new THREE.Mesh(
-          geo,
-          new THREE.MeshStandardMaterial({
-            color:            color,
-            roughness:        0.3,
-            metalness:        0.1,
-            emissive:         emissive,
-            emissiveIntensity: eI,
-            transparent:      true,
-            opacity:          0
-          })
-        );
-        return mesh;
-      };
-
-      // Head
-      var head = mkB(new THREE.SphereGeometry(0.12, 6, 5), 0xc8a882);
-      head.position.set(0, 1.38, 0);
-      head.rotation.x = -0.2;
-      group.add(head);
-      this.modeBMeshes.push(head);
-
-      // Torso
-      var torso = mkB(new THREE.BoxGeometry(0.28, 0.36, 0.16), 0xf5f0e8, 0xfff8f0, 0.04);
-      torso.position.set(0, 0.96, 0);
-      group.add(torso);
-      this.modeBMeshes.push(torso);
-
-      // Left upper leg
-      var leftUpperLeg = mkB(new THREE.CylinderGeometry(0.082, 0.082, 0.34, 5), 0xf5f0e8);
-      leftUpperLeg.position.set(-0.09, 0.61, 0);
-      group.add(leftUpperLeg);
-      this.modeBMeshes.push(leftUpperLeg);
-
-      // Right upper leg (mirror)
-      var rightUpperLeg = mkB(new THREE.CylinderGeometry(0.082, 0.082, 0.34, 5), 0xf5f0e8);
-      rightUpperLeg.position.set(0.09, 0.61, 0);
-      group.add(rightUpperLeg);
-      this.modeBMeshes.push(rightUpperLeg);
-
-      // Left lower leg
-      var leftLowerLeg = mkB(new THREE.CylinderGeometry(0.068, 0.068, 0.30, 5), 0xf5f0e8);
-      leftLowerLeg.position.set(-0.09, 0.28, 0);
-      group.add(leftLowerLeg);
-      this.modeBMeshes.push(leftLowerLeg);
-
-      // Right lower leg (mirror)
-      var rightLowerLeg = mkB(new THREE.CylinderGeometry(0.068, 0.068, 0.30, 5), 0xf5f0e8);
-      rightLowerLeg.position.set(0.09, 0.28, 0);
-      group.add(rightLowerLeg);
-      this.modeBMeshes.push(rightLowerLeg);
-
-      // Left arm
-      var leftArm = mkB(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 5), 0xf5f0e8);
-      leftArm.position.set(-0.22, 0.98, 0);
-      leftArm.rotation.set(0, 0, -0.3);
-      group.add(leftArm);
-      this.modeBMeshes.push(leftArm);
-
-      // Right arm (mirror)
-      var rightArm = mkB(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 5), 0xf5f0e8);
-      rightArm.position.set(0.22, 0.98, 0);
-      rightArm.rotation.set(0, 0, 0.3);
-      group.add(rightArm);
-      this.modeBMeshes.push(rightArm);
-
-      // --- Wings ---
-      // Left wing base vertices
-      var wVerts = new Float32Array([
-         0,     0,     0,
-        -0.85,  0.25,  0,
-        -0.65,  0.72,  0,
-        -0.1,   0.55,  0,
-        -0.28, -0.18,  0
-      ]);
-      var wIdx = [0, 1, 2,  0, 2, 3,  0, 4, 1];
-
-      // Left wing geometry
-      var wGeoL = new THREE.BufferGeometry();
-      wGeoL.setAttribute('position', new THREE.BufferAttribute(wVerts.slice(), 3));
-      wGeoL.setIndex(wIdx);
-      wGeoL.computeVertexNormals();
-
-      var wingMatL = new THREE.MeshStandardMaterial({
-        color:            0xffffff,
-        emissive:         0xfff5e6,
-        emissiveIntensity: 0.15,
-        side:             THREE.DoubleSide,
-        transparent:      true,
-        opacity:          0,
-        roughness:        0.3,
-        metalness:        0.05
-      });
-      var leftWing = new THREE.Mesh(wGeoL, wingMatL);
-      leftWing.position.set(-0.14, 1.05, -0.12);
-      leftWing.rotation.set(0.15, 0.2, 0.1);
-      leftWing.userData.isWing = true;
-      leftWing.userData.wingBaseRotZ = 0.1;
-      leftWing.userData.wingDir = -1; // left flaps up when right flaps down
-      group.add(leftWing);
-      this.modeBMeshes.push(leftWing);
-
-      // Right wing geometry (flip X coords)
-      var wVertsR = wVerts.slice();
-      for (var vi = 0; vi < wVertsR.length; vi += 3) {
-        wVertsR[vi] = -wVertsR[vi]; // negate X
-      }
-      var wGeoR = new THREE.BufferGeometry();
-      wGeoR.setAttribute('position', new THREE.BufferAttribute(wVertsR, 3));
-      wGeoR.setIndex(wIdx);
-      wGeoR.computeVertexNormals();
-
-      var wingMatR = new THREE.MeshStandardMaterial({
-        color:            0xffffff,
-        emissive:         0xfff5e6,
-        emissiveIntensity: 0.15,
-        side:             THREE.DoubleSide,
-        transparent:      true,
-        opacity:          0,
-        roughness:        0.3,
-        metalness:        0.05
-      });
-      var rightWing = new THREE.Mesh(wGeoR, wingMatR);
-      rightWing.position.set(0.14, 1.05, -0.12);
-      rightWing.rotation.set(0.15, -0.2, -0.1);
-      rightWing.userData.isWing = true;
-      rightWing.userData.wingBaseRotZ = -0.1;
-      rightWing.userData.wingDir = 1; // right flaps opposite to left
-      group.add(rightWing);
-      this.modeBMeshes.push(rightWing);
-
-      // Halo
-      var halo = mkB(
-        new THREE.TorusGeometry(0.14, 0.012, 8, 24),
-        0xd4a843,
-        0xd4a843,
-        0.4
-      );
-      halo.position.set(0, 1.58, 0);
-      halo.rotation.x = 0.3;
-      group.add(halo);
-      this.modeBMeshes.push(halo);
-
-      // Point light glow
-      var glow = new THREE.PointLight(0xfff5e6, 0.7, 2.5);
-      glow.position.set(0, 1.2, 0);
-      group.add(glow);
-      // Note: PointLight is NOT a Mesh, so we don't push it into modeBMeshes
-      // (setGroupOpacity traverses isMesh only, which is correct)
-    },
-
-    /* ------------------------------------------------------------------
-     * init
+     * init — create groups, kick off async GLB loading
      * ------------------------------------------------------------------ */
     init: function () {
       var THREE = AFRAME.THREE;
@@ -581,12 +331,7 @@
 
       this.groupA = new THREE.Group();
       this.groupB = new THREE.Group();
-
-      this.buildModeA(this.groupA);
-      this.buildModeB(this.groupB);
-
       this.groupB.visible = false;
-
       this.el.object3D.add(this.groupA);
       this.el.object3D.add(this.groupB);
 
@@ -595,23 +340,140 @@
       this.transitionProgress  = 0;
       this.TRANSITION_DURATION = 1.5;
 
-      this.waiting     = false;
-      this.waitElapsed = 0;
+      this.waiting       = false;
+      this.waitElapsed   = 0;
       this.WAIT_DURATION = 2.0;
 
-      this.flyingUp   = false;
-      this.flyElapsed = 0;
+      this.flyingUp     = false;
+      this.flyElapsed   = 0;
       this.FLY_DURATION = 3.2;
       this.FLY_END_Y    = 2.8;
 
       this.modeBStarted = false;
+
+      // GLB load state
+      this.loaded                = false;
+      this._loadCount            = 0;
+      this.pendingHealingPercent = this.data.healingPercent;
+
+      this.loadCharacterModels();
     },
 
     /* ------------------------------------------------------------------
-     * update — react to schema data changes
+     * loadCharacterModels — async-load both GLB files
+     * ------------------------------------------------------------------ */
+    loadCharacterModels: function () {
+      var self  = this;
+      var THREE = AFRAME.THREE;
+
+      if (typeof THREE.GLTFLoader !== 'function') {
+        console.error('[character-animator] THREE.GLTFLoader is unavailable');
+        return;
+      }
+      var loader = new THREE.GLTFLoader();
+
+      loader.load(
+        'models/character-mode-a.glb',
+        function (gltf) {
+          self.groupA.add(gltf.scene);
+          self.bindModeA(gltf.scene);
+          self.onGlbLoaded();
+        },
+        undefined,
+        function (err) {
+          console.error('[character-animator] failed to load mode A GLB', err);
+        }
+      );
+
+      loader.load(
+        'models/character-mode-b.glb',
+        function (gltf) {
+          self.groupB.add(gltf.scene);
+          self.bindModeB(gltf.scene);
+          self.onGlbLoaded();
+        },
+        undefined,
+        function (err) {
+          console.error('[character-animator] failed to load mode B GLB', err);
+        }
+      );
+    },
+
+    /* ------------------------------------------------------------------
+     * onGlbLoaded — fires once per GLB; ready when both are in
+     * ------------------------------------------------------------------ */
+    onGlbLoaded: function () {
+      this._loadCount += 1;
+      if (this._loadCount < 2) { return; }
+      this.loaded = true;
+      this.applyHealingVisuals(this.pendingHealingPercent);
+      document.dispatchEvent(new CustomEvent('character-ready'));
+    },
+
+    /* ------------------------------------------------------------------
+     * captureRest — store a mesh's load-time transform for relative anim
+     * ------------------------------------------------------------------ */
+    captureRest: function (mesh) {
+      if (!mesh) { return; }
+      mesh.userData.restPos   = mesh.position.clone();
+      mesh.userData.restRot   = mesh.rotation.clone();
+      mesh.userData.restScale = mesh.scale.clone();
+    },
+
+    /* ------------------------------------------------------------------
+     * bindModeA — resolve Mode A parts from the loaded GLB by node name
+     * ------------------------------------------------------------------ */
+    bindModeA: function (scene) {
+      this.headMesh  = scene.getObjectByName('head');
+      this.torsoMesh = scene.getObjectByName('torso');
+
+      // Clone the torso material so the healing colour lerp tints only the
+      // torso, not the legs that share the `a_cloth` material in the GLB.
+      if (this.torsoMesh && this.torsoMesh.material) {
+        this.torsoMesh.material = this.torsoMesh.material.clone();
+      }
+
+      // Wound cracks are baked into the GLB once generate_character.py is
+      // re-run in Blender; until then this node is simply absent.
+      this.crackLines = scene.getObjectByName('wound_cracks') || null;
+      this.crackMat   = this.crackLines ? this.crackLines.material : null;
+      if (this.crackMat) {
+        this.crackMat.transparent = true;   // required for the healing fade
+      }
+
+      this.captureRest(this.headMesh);
+      this.captureRest(this.torsoMesh);
+    },
+
+    /* ------------------------------------------------------------------
+     * bindModeB — resolve Mode B parts; tag wings; add the glow light
+     * ------------------------------------------------------------------ */
+    bindModeB: function (scene) {
+      var THREE = AFRAME.THREE;
+
+      var wingL = scene.getObjectByName('wing_l');
+      var wingR = scene.getObjectByName('wing_r');
+      if (wingL) {
+        wingL.userData.isWing       = true;
+        wingL.userData.wingBaseRotZ = wingL.rotation.z;
+        wingL.userData.wingDir      = -1;
+      }
+      if (wingR) {
+        wingR.userData.isWing       = true;
+        wingR.userData.wingBaseRotZ = wingR.rotation.z;
+        wingR.userData.wingDir      = 1;
+      }
+
+      // Glow light — not part of the GLB (a light, not geometry).
+      var glow = new THREE.PointLight(0xfff5e6, 0.7, 2.5);
+      glow.position.set(0, 1.2, 0);
+      this.groupB.add(glow);
+    },
+
+    /* ------------------------------------------------------------------
+     * update — react to schema changes
      * ------------------------------------------------------------------ */
     update: function (oldData) {
-      // Mode A → B transition trigger
       if (
         oldData &&
         oldData.mode === 'a' &&
@@ -621,9 +483,11 @@
         this.startModeTransition();
       }
 
-      // Healing visuals
       if (oldData && oldData.healingPercent !== this.data.healingPercent) {
-        this.applyHealingVisuals(this.data.healingPercent);
+        this.pendingHealingPercent = this.data.healingPercent;
+        if (this.loaded) {
+          this.applyHealingVisuals(this.data.healingPercent);
+        }
       }
     },
 
@@ -634,12 +498,10 @@
       var THREE = AFRAME.THREE;
       var t = percent / 100;
 
-      // Fade wound cracks
       if (this.crackMat) {
         this.crackMat.opacity = 1 - t;
       }
 
-      // Lerp torso color from war-dark to slightly lighter
       if (this.torsoMesh && this.torsoMesh.material) {
         var colorA = new THREE.Color(0x2a2218);
         var colorB = new THREE.Color(0x4a3c28);
@@ -648,12 +510,11 @@
     },
 
     /* ------------------------------------------------------------------
-     * startModeTransition — begin cross-fade from A to B
+     * startModeTransition — begin the A→B cross-fade
      * ------------------------------------------------------------------ */
     startModeTransition: function () {
       this.modeBStarted = true;
       this.groupB.visible = true;
-      // Ensure all mode B meshes start at opacity 0
       this.setGroupOpacity(this.groupB, 0);
       this.transitioning      = true;
       this.transitionProgress = 0;
@@ -675,38 +536,35 @@
      * tick — per-frame animation
      * ------------------------------------------------------------------ */
     tick: function (time, delta) {
+      if (!this.loaded) { return; }
       var dt = delta / 1000;
 
-      // ── Mode A idle breathing (only while sitting, before transition) ──
+      // Mode A idle breathing (before the transition begins)
       if (!this.modeBStarted && this.groupA.visible) {
-        // Slow sine wave: ~4-second breath cycle
-        var breathe   = Math.sin(time * 0.00157) * 0.006;  // ±6mm vertical
-        var sway      = Math.sin(time * 0.00094) * 0.004;  // ±0.23° side sway
-        var slumpRock = Math.sin(time * 0.00063) * 0.003;  // ±0.17° forward rock
+        var breathe   = Math.sin(time * 0.00157) * 0.006;
+        var sway      = Math.sin(time * 0.00094) * 0.004;
+        var slumpRock = Math.sin(time * 0.00063) * 0.003;
 
-        // Torso rises/falls with each breath
         if (this.torsoMesh) {
-          this.torsoMesh.position.y = 0.38 + breathe;
-          this.torsoMesh.scale.y    = 1 + breathe * 0.8;
+          var trp = this.torsoMesh.userData.restPos;
+          var trs = this.torsoMesh.userData.restScale;
+          this.torsoMesh.position.y = trp.y + breathe;
+          this.torsoMesh.scale.y    = trs.y * (1 + breathe * 0.8);
         }
-        // Head follows the torso
         if (this.headMesh) {
-          this.headMesh.position.y = 0.68 + breathe;
+          this.headMesh.position.y = this.headMesh.userData.restPos.y + breathe;
         }
-        // Whole figure gently sways / rocks — looks like quiet despair
         this.groupA.rotation.z = sway;
         this.groupA.rotation.x = slumpRock;
 
-        // Wound cracks pulse around their healed opacity (oscillate, don't decay)
         if (this.crackMat) {
           var baseOpacity = 1 - (this.data.healingPercent / 100);
           this.crackMat.opacity = Math.max(0, baseOpacity + Math.sin(time * 0.0031) * 0.12);
         }
       }
 
-      // ── Mode B idle: wing flap + gentle bob while standing ──
+      // Mode B idle: wing flap + gentle bob
       if (this.modeBStarted && this.groupB.visible) {
-        // Wing beat: ~2.8-second cycle, ±8° rotation
         var flapAngle = Math.sin(time * 0.00224) * 0.14;
         this.groupB.traverse(function (child) {
           if (child.userData.isWing) {
@@ -714,23 +572,22 @@
               + flapAngle * child.userData.wingDir;
           }
         });
-        // Bob up/down while waiting (before fly-up)
         if (this.waiting) {
           this.groupB.position.y = Math.sin(time * 0.002) * 0.018;
         }
       }
 
-      // Cross-fade transition A → B
+      // Cross-fade A → B
       if (this.transitioning) {
         this.transitionProgress = Math.min(1, this.transitionProgress + dt / this.TRANSITION_DURATION);
         this.setGroupOpacity(this.groupA, 1 - this.transitionProgress);
         this.setGroupOpacity(this.groupB,     this.transitionProgress);
 
         if (this.transitionProgress >= 1) {
-          this.transitioning      = false;
-          this.groupA.visible     = false;
-          this.waiting            = true;
-          this.waitElapsed        = 0;
+          this.transitioning  = false;
+          this.groupA.visible = false;
+          this.waiting        = true;
+          this.waitElapsed    = 0;
         }
       }
 
@@ -759,11 +616,10 @@
     },
 
     /* ------------------------------------------------------------------
-     * remove — clean up Three.js objects when component is detached
+     * remove — dispose loaded scenes
      * ------------------------------------------------------------------ */
     remove: function () {
       var self = this;
-
       var disposeGroup = function (group) {
         group.traverse(function (child) {
           if (child.isMesh) {
@@ -775,14 +631,8 @@
           self.el.object3D.remove(group);
         }
       };
-
       if (this.groupA) { disposeGroup(this.groupA); }
       if (this.groupB) { disposeGroup(this.groupB); }
-
-      if (this.crackMat)   { this.crackMat.dispose(); }
-      if (this.crackLines && this.crackLines.geometry) {
-        this.crackLines.geometry.dispose();
-      }
     }
   });
 
