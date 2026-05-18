@@ -53,11 +53,10 @@ The HUD layer talks to the AR engine only through DOM CustomEvents. The migratio
 
 ```
 public/
-├── ar.html                          [EDIT]   swap <a-scene> attrs + scripts
+├── ar.html                          [EDIT]   swap <a-scene> attrs + scripts + bootstrap
 ├── js/
 │   ├── webxr-placement.js           [DELETE] replaced
 │   ├── eighth-wall-placement.js     [NEW]    8th Wall engine adapter
-│   ├── config.js                    [NEW, GENERATED] exposes window.__APP_KEY__
 │   ├── healing-sync.js              [UNCHANGED]
 │   ├── end-sequence.js              [UNCHANGED]
 │   └── components.js                [UNCHANGED]
@@ -66,11 +65,10 @@ public/
 ├── targets/board.mind               [DELETE] MindAR-specific, dead code
 └── models/                          [UNCHANGED]
 
+src/app/api/ar-config/route.ts       [EDIT]   add appKey to JSON response
 src/app/ar/page.tsx                  [UNCHANGED] still redirects to /ar.html
 .env.local / .env.example            [EDIT]   add NEXT_PUBLIC_8THWALL_APP_KEY
 next.config.ts                       [EDIT]   CSP for apps.8thwall.com / cdn.8thwall.com
-package.json                         [EDIT]   add prebuild script that generates public/js/config.js
-.gitignore                           [EDIT]   add public/js/config.js
 ```
 
 ### 4.1 `public/ar.html` (edit)
@@ -82,13 +80,13 @@ package.json                         [EDIT]   add prebuild script that generates
 - `webxr-placement` component reference on `#placement-reticle`
 
 **Add:**
-- `<script src="js/config.js">` (generated; appends the 8th Wall `<script>` tag to `<head>` with the App Key embedded, so no inline script is needed in `ar.html`)
+- A tiny inline bootstrap that `fetch('/api/ar-config')`, then `<script>`-injects 8th Wall with the returned `appKey` and dispatches a `8thwall-ready` event when the SDK has registered its A-Frame components. A-Frame initialization is gated on this event so `xrweb` / `xrextras-*` attributes are recognized when `<a-scene>` is parsed.
 - `xrweb` system attribute on `<a-scene>` (e.g., `xrweb="enabled: true"`)
 - `xrextras-tap-recenter` for re-centering UX
 - `<script src="js/eighth-wall-placement.js">`
 - `eighth-wall-placement` component on `#placement-reticle`
 
-The generated `config.js` does two jobs: (1) embed the App Key, (2) inject the 8th Wall bootstrap script tag. Folding both into one external file avoids needing `'unsafe-inline'` in CSP.
+The bootstrap reuses the existing `/api/ar-config` route pattern (already used by `healing-sync.js` for the Ably key), so there's a single env-config endpoint instead of two parallel mechanisms.
 
 **Keep:** the entry gateway (`#enter-gateway`) — 8th Wall still needs a user-gesture for `getUserMedia`, so the existing "tap to enter AR" button serves the same purpose. The gateway's *support check* changes: instead of `navigator.xr.isSessionSupported`, we feature-detect `getUserMedia` and let 8th Wall's own startup error reporting handle the rest.
 
@@ -110,14 +108,14 @@ A single A-Frame component mirroring the public contract of `webxr-placement`:
 Add a `Content-Security-Policy` response header so 8th Wall's scripts load:
 
 ```
-script-src 'self' apps.8thwall.com cdn.8thwall.com 'unsafe-eval';
+script-src 'self' apps.8thwall.com cdn.8thwall.com 'unsafe-eval' 'unsafe-inline';
 connect-src 'self' apps.8thwall.com cdn.8thwall.com *.ably.io wss://*.ably.io;
 worker-src 'self' blob:;
 img-src 'self' data: blob:;
 media-src 'self' blob:;
 ```
 
-`unsafe-eval` is required by 8th Wall's runtime VM. No `'unsafe-inline'` because all scripts are external (see §4.1).
+`unsafe-eval` is required by 8th Wall's runtime VM. `'unsafe-inline'` is required for the small inline bootstrap that fetches `/api/ar-config` and injects the 8th Wall script tag. Scope this header to the AR page only (`source: '/ar.html'`) so the rest of the site keeps a stricter policy.
 
 ### 4.4 Env + App Key injection
 
@@ -126,30 +124,44 @@ media-src 'self' blob:;
 .env.local:    NEXT_PUBLIC_8THWALL_APP_KEY=<the real key>
 ```
 
-`package.json` gets a `prebuild` and a `predev` script that generates `public/js/config.js`:
+`src/app/api/ar-config/route.ts` is edited to include the App Key in the JSON it already returns:
 
-```js
-// public/js/config.js (generated, gitignored)
-(function () {
-  var key = "<NEXT_PUBLIC_8THWALL_APP_KEY value>";
-  window.__APP_KEY__ = key;
-  if (!key) return; // empty key → ar.html shows #ar-unsupported
-  var s = document.createElement('script');
-  s.src = 'https://apps.8thwall.com/xrweb?appKey=' + encodeURIComponent(key);
-  document.head.appendChild(s);
-})();
+```ts
+return NextResponse.json({
+  ablyKey: process.env.NEXT_PUBLIC_ABLY_KEY ?? '',
+  channelName: process.env.NEXT_PUBLIC_ABLY_CHANNEL ?? 'ar-art:peace-board:v1',
+  ablyEnabled: process.env.NEXT_PUBLIC_ABLY_ENABLED === 'true',
+  appKey: process.env.NEXT_PUBLIC_8THWALL_APP_KEY ?? '',
+});
 ```
 
-This keeps `ar.html` static, works identically in `next dev` and Vercel prod, and avoids introducing a Next.js route just for one inline value.
+`ar.html` gains a small inline bootstrap at the top of `<head>`:
+
+```html
+<script>
+  fetch('/api/ar-config')
+    .then(r => r.json())
+    .then(cfg => {
+      if (!cfg.appKey) { window.dispatchEvent(new CustomEvent('8thwall-missing-key')); return; }
+      var s = document.createElement('script');
+      s.src = 'https://apps.8thwall.com/xrweb?appKey=' + encodeURIComponent(cfg.appKey);
+      s.onload = function () { window.dispatchEvent(new CustomEvent('8thwall-ready')); };
+      document.head.appendChild(s);
+    });
+</script>
+```
+
+Reuses the existing config endpoint. Single env-loading pattern in the codebase. No new build step.
 
 ## 5. Runtime data flow
 
 ### Page load
 ```
 /ar.html (static)
- ├─► <script src="js/config.js">       (generated; sets __APP_KEY__ AND injects 8th Wall <script>)
- │     └─► <script src="apps.8thwall.com/xrweb?appKey=..."> appended to <head>
- │          └─ registers `xrweb`, `xrextras-*` A-Frame components
+ ├─► inline bootstrap: fetch('/api/ar-config')
+ │    └─► appends <script src="apps.8thwall.com/xrweb?appKey=..."> to <head>
+ │         └─► onload → window dispatches '8thwall-ready'
+ │              └─ A-Frame `xrweb` / `xrextras-*` components now registered
  ├─► <script src="https://aframe.io/.../aframe.min.js">
  ├─► <script src="js/components.js">   (character-animator, tornado, etc.)
  ├─► <script src="js/eighth-wall-placement.js">
