@@ -96,7 +96,18 @@
 
     </a-marker>
 
-    <!-- No <a-entity camera> — AR.js injects its own camera; a manual one causes conflicts -->
+    <!-- Explicit camera, fixed at the origin with identity rotation. AR.js marker
+         mode positions the MARKER in camera space, so the camera must stay at
+         identity. With no camera declared, A-Frame injects a default one at
+         0 1.6 0 WITH look-controls — the gyroscope then rotates the camera and
+         fights marker tracking, so the model drifts off the Hiro surface. -->
+    <a-entity
+      camera="active: true"
+      position="0 0 0"
+      rotation="0 0 0"
+      look-controls="enabled: false"
+      wasd-controls="enabled: false"
+    ></a-entity>
   </a-scene>
 
   <script>
