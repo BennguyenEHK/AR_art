@@ -191,11 +191,21 @@
         if (character) character.setAttribute('character-animator', 'healingPercent', percent);
       });
 
-      // Scene load handler
-      scene.addEventListener('loaded', function () {
-        // Fade out loading overlay
+      // The loading overlay is cleared only once the character GLBs have
+      // loaded (character-animator dispatches `character-ready`). A safety
+      // timeout guarantees the spinner never hangs if a GLB fails to load.
+      let overlayCleared = false;
+      function clearOverlay() {
+        if (overlayCleared) { return; }
+        overlayCleared = true;
         overlay.classList.add('fade-out');
         setTimeout(() => overlay.classList.add('hidden'), 900);
+      }
+      document.addEventListener('character-ready', clearOverlay);
+      setTimeout(clearOverlay, 8000);
+
+      // Scene load handler
+      scene.addEventListener('loaded', function () {
         setScanning();
 
         // Start healing sync after scene is ready
