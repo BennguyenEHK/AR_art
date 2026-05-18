@@ -62,14 +62,16 @@
   <script src="js/end-sequence.js"></script>
 
   <!-- A-Frame scene: `embedded` is REQUIRED for AR.js to composite the camera video correctly
-       on mobile Chrome. Without it: black screen + VR button appears regardless of vr-mode-ui. -->
+       on mobile Chrome. Without it: black screen + VR button appears regardless of vr-mode-ui.
+       sourceWidth/sourceHeight request a 1280x720 camera capture — the extra pixels let the
+       marker detector resolve the Hiro pattern at steeper angles and greater distance. -->
   <a-scene
     id="ar-scene"
     embedded
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
     background="transparent: true"
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; debugUIEnabled: false"
+    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; sourceWidth: 1280; sourceHeight: 720; debugUIEnabled: false"
   >
     <!-- Lighting: required for MeshStandardMaterial to render with color -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
@@ -77,9 +79,9 @@
 
     <!-- Heavy pose smoothing: the marker sits on a static table, so averaging
          many frames costs no meaningful latency but strongly suppresses tracking
-         jitter. smoothCount=15 averages 15 frames; the wider tolerance/threshold
+         jitter. smoothCount=25 averages 25 frames; the wider tolerance/threshold
          enlarge the dead-band so sub-threshold micro-jitter is ignored entirely. -->
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="15" smoothTolerance="0.02" smoothThreshold="5">
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="25" smoothTolerance="0.03" smoothThreshold="8">
 
       <!-- Main character: position Y=-0.15 shifts character down so lower legs
            (originally at y=0.14) land at y=-0.01, effectively on the marker surface.
