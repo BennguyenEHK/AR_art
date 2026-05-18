@@ -48,4 +48,8 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
+# python (Blender script byte-cache)
+__pycache__/
+*.pyc
+
 certificates
