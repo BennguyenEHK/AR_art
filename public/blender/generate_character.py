@@ -16,8 +16,8 @@ import os
 import math
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_A = os.path.normpath(os.path.join(SCRIPT_DIR, '../../models/character-mode-a.glb'))
-OUTPUT_B = os.path.normpath(os.path.join(SCRIPT_DIR, '../../models/character-mode-b.glb'))
+OUTPUT_A = os.path.normpath(os.path.join(SCRIPT_DIR, '../models/character-mode-a.glb'))
+OUTPUT_B = os.path.normpath(os.path.join(SCRIPT_DIR, '../models/character-mode-b.glb'))
 
 
 # ---------------------------------------------------------------------------
