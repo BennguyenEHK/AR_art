@@ -17,13 +17,12 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
-  background: transparent;
+  background: #0d0d0d;
   overflow: hidden;
+  overflow-x: hidden;
   width: 100%;
   height: 100%;
   height: 100dvh;
-  max-width: 100vw;
-  overflow-x: hidden;
   font-family: 'Share Tech Mono', monospace;
 }
 
@@ -74,13 +73,21 @@ html, body {
   height: 100dvh !important;
   z-index: 1 !important;
   background: transparent !important;
+  overflow: hidden !important;
 }
 
 /* Ensure the WebGL canvas itself has no opaque background and fills the full viewport */
 #ar-scene canvas {
+  display: block !important;
   background: transparent !important;
-  width: 100vw !important;
-  height: 100dvh !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* A-Frame wraps its canvas in an internal div; force it to fill the scene element */
+#ar-scene > div {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* AR.js injects a <video> into <body> for the webcam feed.
@@ -342,12 +349,24 @@ body > video {
   border-color: rgba(212, 168, 67, 0.65);
 }
 
-/* ── Hide A-Frame VR/AR entry buttons (AR.js sometimes re-enables them) ── */
+/* ── Hide A-Frame VR/AR entry buttons and all UI overlays ── */
+/* A-Frame 1.6.0 uses .a-enter-vr as the container div and .a-enter-vr-button
+   for the actual button; AR.js may re-inject these even when vr-mode-ui is disabled */
 .a-enter-vr,
 .a-enter-vr-button,
 .a-enter-ar,
-.a-enter-ar-button {
+.a-enter-ar-button,
+.a-enter-vr-modal,
+.a-enter-ar-modal,
+.a-loader-title,
+.a-orientation-modal,
+.a-dialog,
+[data-aframe-info],
+a-scene > div:not(.a-canvas) {
   display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 
 /* ── Utility ─────────────────────────────────────────────────────── */
