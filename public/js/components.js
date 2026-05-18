@@ -15,7 +15,8 @@
  *                        Each plane independently manages its own flicker timer.
  *                        Schema: { intensity: number }
  *
- *  character-animator  — Full procedural 3D character in Three.js (no GLB dependency).
+ *  character-animator  — Loads the Mode A / Mode B character from GLB files
+ *                        (character-mode-{a,b}.glb); all animation is JS-driven.
  *                        Mode A: war-zone soldier sitting on the ground with wounds.
  *                        Mode B: healing angel that fades in then flies upward.
  *                        Schema: { healingPercent: number, mode: string }
