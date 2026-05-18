@@ -71,7 +71,7 @@
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
     background="transparent: true"
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; sourceWidth: 1280; sourceHeight: 720; debugUIEnabled: false"
+    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; sourceWidth: 1280; sourceHeight: 720; debugUIEnabled: false; maxDetectionRate: 60"
   >
     <!-- Lighting: required for MeshStandardMaterial to render with color -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
@@ -81,15 +81,14 @@
          many frames costs no meaningful latency but strongly suppresses tracking
          jitter. smoothCount=25 averages 25 frames; the wider tolerance/threshold
          enlarge the dead-band so sub-threshold micro-jitter is ignored entirely. -->
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="25" smoothTolerance="0.03" smoothThreshold="8">
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="40" smoothTolerance="0.03" smoothThreshold="8">
 
-      <!-- Main character: position Y=-0.15 shifts character down so lower legs
-           (originally at y=0.14) land at y=-0.01, effectively on the marker surface.
-           Torso (originally y=0.38) becomes y=0.23 — a natural sitting height above marker. -->
+      <!-- Main character: position Y=-0.18 shifts lower legs to y=-0.04, sinking
+           feet slightly into the marker plane for a grounded feel (matches dino demo). -->
       <a-entity
         id="character-root"
         character-animator="healingPercent: 0; mode: a"
-        position="0 -0.15 0"
+        position="0 -0.18 0"
         rotation="0 0 0"
       ></a-entity>
 
@@ -215,8 +214,27 @@
         }
       });
 
-      marker.addEventListener('markerFound', setLocked);
-      marker.addEventListener('markerLost', setScanning);
+      var markerEverFound   = false;
+      var lightingHintTimer = null;
+
+      marker.addEventListener('markerFound', function () {
+        markerEverFound = true;
+        if (lightingHintTimer) {
+          clearTimeout(lightingHintTimer);
+          lightingHintTimer = null;
+        }
+        // Reset hint text so next scan phase shows the default message
+        hintPill.textContent = 'point camera at hiro marker';
+        setLocked(); // setLocked() hides hintPill; text is ready for next markerLost→setScanning cycle
+      });
+
+      marker.addEventListener('markerLost', function () {
+        setScanning();
+        if (!markerEverFound) { return; }
+        lightingHintTimer = setTimeout(function () {
+          hintPill.textContent = 'try better lighting · flatten the marker';
+        }, 3000);
+      });
 
     })();
   </script>
