@@ -46,7 +46,7 @@
 
     init: function () {
       var THREE = AFRAME.THREE;
-      var N = 800;
+      var N = 1500;
       var positions = new Float32Array(N * 3);
 
       for (var i = 0; i < N; i++) {
@@ -55,9 +55,9 @@
         var angle = t * Math.PI * 2 * turns;
         var radius = 0.2 + t * 0.5;
         var height = t * 1.6;
-        var x = Math.cos(angle) * radius + (Math.random() - 0.5) * 0.08;
-        var y = height;
-        var z = Math.sin(angle) * radius + (Math.random() - 0.5) * 0.08;
+        var x = Math.cos(angle) * radius + (Math.random() - 0.5) * 0.22;
+        var y = height + (Math.random() - 0.5) * 0.12;
+        var z = Math.sin(angle) * radius + (Math.random() - 0.5) * 0.22;
         positions[i * 3]     = x;
         positions[i * 3 + 1] = y;
         positions[i * 3 + 2] = z;
@@ -70,7 +70,7 @@
 
       var material = new THREE.PointsMaterial({
         color: 0x4a3322,
-        size: 0.03,
+        size: 0.046,
         transparent: true,
         sizeAttenuation: true,
         opacity: this.data.intensity * 0.85
@@ -85,7 +85,7 @@
       if (!this.particles) { return; }
       var intensity = this.data.intensity;
       this.particles.material.opacity = intensity * 0.85;
-      this.particles.material.size    = 0.018 + intensity * 0.018;
+      this.particles.material.size    = 0.024 + intensity * 0.022;
       this.particles.visible          = intensity > 0.005;
     },
 
@@ -338,14 +338,14 @@
       // Head
       var head = mk(new THREE.SphereGeometry(0.12, 6, 5), 0x5c3d2e);
       head.position.set(0, 0.68, 0.08);
-      head.rotation.x = 0.5;
+      head.rotation.x = 0.32;
       group.add(head);
       this.headMesh = head;
 
       // Torso
       var torso = mk(new THREE.BoxGeometry(0.30, 0.32, 0.18), 0x2a2218);
       torso.position.set(0, 0.38, 0.02);
-      torso.rotation.x = 0.25;
+      torso.rotation.x = 0.12;
       group.add(torso);
       this.torsoMesh = torso;
 
