@@ -75,9 +75,11 @@
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <!-- smoothCount reduced 5→3: fewer averaged frames = faster response on phone rotation.
-         smoothTolerance reduced 0.05→0.01: tighter tolerance for more precise marker tracking. -->
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="3" smoothTolerance="0.01">
+    <!-- Heavy pose smoothing: the marker sits on a static table, so averaging
+         many frames costs no meaningful latency but strongly suppresses tracking
+         jitter. smoothCount=15 averages 15 frames; the wider tolerance/threshold
+         enlarge the dead-band so sub-threshold micro-jitter is ignored entirely. -->
+    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="15" smoothTolerance="0.02" smoothThreshold="5">
 
       <!-- Main character: position Y=-0.15 shifts character down so lower legs
            (originally at y=0.14) land at y=-0.01, effectively on the marker surface.
