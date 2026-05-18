@@ -13,7 +13,7 @@
       this.hasHit = false;
       this._wasHit = false;
       this.reticleMesh = null;
-      this._onTap = null;
+      this._onSelect = null;
 
       var THREE = AFRAME.THREE;
 
@@ -32,20 +32,8 @@
       this.el.object3D.add(this.reticleMesh);
 
       var self = this;
-
-      this.el.sceneEl.addEventListener('enter-vr', function() {
-        self._setupHitTest();
-      });
-
-      this.el.sceneEl.addEventListener('exit-vr', function() {
-        self._cleanupHitTest();
-      });
-
-      this._onTap = function(evt) {
-        if (self.placed || !self.hasHit) return;
-        self._placeObject();
-      };
-      this.el.sceneEl.addEventListener('click', this._onTap);
+      this.el.sceneEl.addEventListener('enter-vr', function() { self._setupHitTest(); });
+      this.el.sceneEl.addEventListener('exit-vr',  function() { self._cleanupHitTest(); });
     },
 
     _setupHitTest: function() {
@@ -53,16 +41,22 @@
       this.hitTestSourceRequested = true;
       var session = this.el.sceneEl.renderer.xr.getSession();
       if (!session) { this.hitTestSourceRequested = false; return; }
+      var self = this;
+
+      // Tap-to-place: WebXR 'select' fires on a screen tap during an immersive
+      // session. DOM 'click' events do NOT fire while immersive, so 'select' is
+      // the only reliable way to detect a placement tap.
+      this._onSelect = function() {
+        if (self.placed || !self.hasHit) return;
+        self._placeObject();
+      };
+      session.addEventListener('select', this._onSelect);
+
       try {
-        var self = this;
         session.requestReferenceSpace('viewer').then(function(viewerSpace) {
           return session.requestHitTestSource({ space: viewerSpace });
         }).then(function(source) {
           self.hitTestSource = source;
-          session.addEventListener('end', function() {
-            self.hitTestSource = null;
-            self.hitTestSourceRequested = false;
-          });
         }).catch(function(e) {
           console.warn('[webxr-placement] hit-test source failed:', e);
           self.hitTestSourceRequested = false;
@@ -71,6 +65,14 @@
         console.warn('[webxr-placement] _setupHitTest error:', e);
         this.hitTestSourceRequested = false;
       }
+
+      session.addEventListener('end', function() {
+        if (self._onSelect) {
+          session.removeEventListener('select', self._onSelect);
+        }
+        self.hitTestSource = null;
+        self.hitTestSourceRequested = false;
+      });
     },
 
     tick: function(time) {
@@ -86,7 +88,6 @@
         var pose = results[0].getPose(refSpace);
         if (pose) {
           this.reticleMesh.matrix.fromArray(pose.transform.matrix);
-          // Pulse opacity
           this.reticleMesh.material.opacity = 0.7 + Math.sin(time * 0.004) * 0.15;
           this.reticleMesh.visible = true;
           this.hasHit = true;
@@ -116,20 +117,15 @@
       document.dispatchEvent(new CustomEvent('object-placed', {
         detail: { x: pos.x, y: pos.y, z: pos.z, autoPlaced: false }
       }));
-      this.el.sceneEl.removeEventListener('click', this._onTap);
     },
 
     autoPlace: function() {
       if (this.placed) return;
       this.placed = true;
       if (this.reticleMesh) this.reticleMesh.visible = false;
-      // Place 1.5m ahead, on floor
       document.dispatchEvent(new CustomEvent('object-placed', {
         detail: { x: 0, y: 0, z: -1.5, autoPlaced: true }
       }));
-      if (this._onTap && this.el.sceneEl) {
-        this.el.sceneEl.removeEventListener('click', this._onTap);
-      }
     },
 
     _cleanupHitTest: function() {
@@ -141,9 +137,6 @@
     },
 
     remove: function() {
-      if (this._onTap && this.el.sceneEl) {
-        this.el.sceneEl.removeEventListener('click', this._onTap);
-      }
       if (this.reticleMesh) {
         this.el.object3D.remove(this.reticleMesh);
         this.reticleMesh.geometry.dispose();

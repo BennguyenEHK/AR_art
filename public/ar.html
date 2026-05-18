@@ -14,41 +14,20 @@
     <span>preparing the witness</span>
   </div>
 
-  <!-- HUD top: [souls ←] [status center] [→ healing arc] -->
-  <div id="hud-top">
-    <div id="user-count-pill" class="hud-pill">
-      <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
-      <span id="user-count-text">1 soul present</span>
-    </div>
-    <div id="status-pill" class="hud-pill">
-      <span id="status-dot">○</span>
-      <span id="status-text">scanning</span>
-    </div>
-    <div id="healing-hud">
-      <svg id="healing-arc" viewBox="0 0 44 44">
-        <circle id="arc-bg" cx="22" cy="22" r="18" />
-        <circle id="arc-progress" cx="22" cy="22" r="18" />
-        <text id="arc-percent" x="22" y="22">0%</text>
-      </svg>
-      <div id="arc-label">healing</div>
-    </div>
-  </div>
-
-  <!-- HUD bottom: hint + back -->
-  <div id="hud-bottom">
-    <div id="hint-pill" class="hud-pill">preparing...</div>
-    <a id="back-pill" class="hud-pill" href="/">← return</a>
-  </div>
-
-  <!-- End message overlay -->
-  <div id="end-overlay">
-    <div class="end-message">
-      <div class="end-line" data-delay="400">With many people speaking up —</div>
-      <div class="end-line" data-delay="1800">gun violence will be under control</div>
-      <div class="end-line" data-delay="3200">and reduced significantly.</div>
-      <div class="end-separator" data-delay="4400"></div>
-      <div class="end-tagline" data-delay="4800">The power of many.</div>
-      <button id="restart-btn" data-delay="8500">↩ press to restart</button>
+  <!-- Entry gateway: the single WebXR user-gesture threshold. WebXR requires a
+       user gesture inside THIS document to start an immersive session — it
+       cannot be inherited from the home page navigation. -->
+  <div id="enter-gateway" class="hidden">
+    <div class="gateway-grain"></div>
+    <div class="gateway-inner">
+      <span class="gateway-eyebrow">environment ar · place the witness</span>
+      <h1 class="gateway-title">Cross the<br /><em>threshold</em></h1>
+      <p class="gateway-desc">Find any flat surface — floor, table, ground. Tap once to place the witness. Everyone present heals together, in real time.</p>
+      <button id="enter-ar-btn" disabled>
+        <span class="gateway-btn-ring"></span>
+        <span class="gateway-btn-label">◉ enter ar</span>
+      </button>
+      <span class="gateway-status" id="gateway-status">checking device…</span>
     </div>
   </div>
 
@@ -60,10 +39,50 @@
     <a href="/">← return home</a>
   </div>
 
-  <!-- Scripts: defer Ably so it doesn't block A-Frame init -->
+  <!-- DOM overlay root: the ONLY DOM subtree visible during the immersive AR
+       session. Declared BEFORE <a-scene> so the webxr overlayElement selector
+       resolves when the scene initialises. -->
+  <div id="ar-overlay">
+    <div id="hud-top">
+      <div id="user-count-pill" class="hud-pill">
+        <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
+        <span id="user-count-text">1 soul present</span>
+      </div>
+      <div id="status-pill" class="hud-pill">
+        <span id="status-dot">○</span>
+        <span id="status-text">scanning</span>
+      </div>
+      <div id="healing-hud">
+        <svg id="healing-arc" viewBox="0 0 44 44">
+          <circle id="arc-bg" cx="22" cy="22" r="18" />
+          <circle id="arc-progress" cx="22" cy="22" r="18" />
+          <text id="arc-percent" x="22" y="22">0%</text>
+        </svg>
+        <div id="arc-label">healing</div>
+      </div>
+    </div>
+
+    <div id="hud-bottom">
+      <div id="hint-pill" class="hud-pill">preparing...</div>
+      <a id="back-pill" class="hud-pill" href="/">← return</a>
+    </div>
+
+    <div id="end-overlay">
+      <div class="end-message">
+        <div class="end-line" data-delay="400">With many people speaking up —</div>
+        <div class="end-line" data-delay="1800">gun violence will be under control</div>
+        <div class="end-line" data-delay="3200">and reduced significantly.</div>
+        <div class="end-separator" data-delay="4400"></div>
+        <div class="end-tagline" data-delay="4800">The power of many.</div>
+        <button id="restart-btn" data-delay="8500">↩ press to restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts: defer Ably so it doesn't block A-Frame init. Custom components
+       MUST be registered before <a-scene> is parsed. -->
   <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <!-- Custom components MUST be registered before <a-scene> is parsed -->
   <script src="js/components.js"></script>
   <script src="js/webxr-placement.js"></script>
   <script src="js/healing-sync.js"></script>
@@ -71,19 +90,18 @@
 
   <a-scene
     id="ar-scene"
-    webxr="requiredFeatures: hit-test; optionalFeatures: local-floor,dom-overlay"
+    webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor; overlayElement: #ar-overlay"
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
     background="color: #000000"
     vr-mode-ui="enabled: false"
   >
-    <!-- Lighting -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <!-- Placement reticle: webxr-placement component manages hit-test + tap-to-place -->
+    <!-- Placement reticle: webxr-placement manages hit-test + tap-to-place -->
     <a-entity id="placement-reticle" webxr-placement></a-entity>
 
-    <!-- Scene root: invisible until object-placed event positions + shows it -->
+    <!-- Scene root: invisible until object-placed positions + reveals it -->
     <a-entity id="scene-root" visible="false">
       <a-entity
         id="character-root"
@@ -95,210 +113,210 @@
       <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
     </a-entity>
 
-    <!-- Camera: WebXR controls this automatically -->
     <a-entity camera></a-entity>
   </a-scene>
 
-  <!-- Enter AR button: shown after AR support confirmed, hidden after tap -->
-  <button id="enter-ar-btn" class="hidden">
-    <span style="font-size:12px; opacity:0.7">◉</span>
-    enter ar
-  </button>
-
   <script>
-    (function () {
-      'use strict';
+  (function () {
+    'use strict';
 
-      var scene          = document.getElementById('ar-scene');
-      var overlay        = document.getElementById('loading-overlay');
-      var statusPill     = document.getElementById('status-pill');
-      var statusDot      = document.getElementById('status-dot');
-      var statusText     = document.getElementById('status-text');
-      var hintPill       = document.getElementById('hint-pill');
-      var arcProgress    = document.getElementById('arc-progress');
-      var arcPercent     = document.getElementById('arc-percent');
-      var arcSvg         = document.getElementById('healing-arc');
-      var userCountText  = document.getElementById('user-count-text');
-      var enterARBtn     = document.getElementById('enter-ar-btn');
-      var arUnsupported  = document.getElementById('ar-unsupported');
-      var arErrorMsg     = document.getElementById('ar-error-msg');
-      var sceneRoot      = document.getElementById('scene-root');
-      var placementReticle = document.getElementById('placement-reticle');
+    var scene          = document.getElementById('ar-scene');
+    var overlay        = document.getElementById('loading-overlay');
+    var gateway        = document.getElementById('enter-gateway');
+    var gatewayStatus  = document.getElementById('gateway-status');
+    var statusPill     = document.getElementById('status-pill');
+    var statusDot      = document.getElementById('status-dot');
+    var statusText     = document.getElementById('status-text');
+    var hintPill       = document.getElementById('hint-pill');
+    var arcProgress    = document.getElementById('arc-progress');
+    var arcPercent     = document.getElementById('arc-percent');
+    var arcSvg         = document.getElementById('healing-arc');
+    var userCountText  = document.getElementById('user-count-text');
+    var enterARBtn     = document.getElementById('enter-ar-btn');
+    var arUnsupported  = document.getElementById('ar-unsupported');
+    var arErrorMsg     = document.getElementById('ar-error-msg');
+    var backPill       = document.getElementById('back-pill');
+    var sceneRoot      = document.getElementById('scene-root');
+    var placementReticle = document.getElementById('placement-reticle');
 
-      var ARC_CIRCUMFERENCE = 2 * Math.PI * 18;
-      var healingSyncStarted = false;
+    var ARC_CIRCUMFERENCE = 2 * Math.PI * 18;
+    var healingSyncStarted = false;
+    var arSupported = null;
 
-      /* ── Status helpers ───────────────────────────────────────────── */
-      function setReadyToEnter() {
-        statusDot.textContent = '○';
-        statusText.textContent = 'ready';
-        statusPill.className = 'hud-pill';
-        hintPill.textContent = 'tap enter ar to begin';
-        hintPill.className = 'hud-pill';
-        hintPill.classList.remove('hidden');
-      }
+    /* ── Status helpers ─────────────────────────────────────────── */
+    function setSearching() {
+      statusDot.textContent = '○';
+      statusText.textContent = 'scanning';
+      statusPill.className = 'hud-pill scanning';
+      hintPill.textContent = 'move phone to find a surface';
+      hintPill.className = 'hud-pill';
+      hintPill.classList.remove('hidden');
+    }
+    function setSurfaceDetected() {
+      statusDot.textContent = '◎';
+      statusText.textContent = 'surface found';
+      statusPill.className = 'hud-pill surface-detected';
+      hintPill.textContent = 'tap anywhere to place';
+      hintPill.className = 'hud-pill tap-to-place';
+      hintPill.classList.remove('hidden');
+    }
+    function setPlaced() {
+      statusDot.textContent = '●';
+      statusText.textContent = 'placed';
+      statusPill.className = 'hud-pill placed';
+      hintPill.classList.add('hidden');
+    }
 
-      function setSearching() {
-        statusDot.textContent = '○';
-        statusText.textContent = 'scanning';
-        statusPill.className = 'hud-pill scanning';
-        hintPill.textContent = 'move phone to find a surface';
-        hintPill.className = 'hud-pill';
-        hintPill.classList.remove('hidden');
-      }
+    /* ── Healing arc ────────────────────────────────────────────── */
+    function updateHealingArc(percent) {
+      var filled = (percent / 100) * ARC_CIRCUMFERENCE;
+      arcProgress.style.strokeDasharray = filled + ' ' + ARC_CIRCUMFERENCE;
+      arcPercent.textContent = Math.round(percent) + '%';
+      var t = percent / 100;
+      var r = Math.round(196 + (212 - 196) * t);
+      var g = Math.round(98  + (168 - 98)  * t);
+      var b = Math.round(45  + (67  - 45)  * t);
+      arcProgress.style.stroke = 'rgb(' + r + ',' + g + ',' + b + ')';
+      arcPercent.style.fill = percent > 50
+        ? 'rgba(212,168,67,' + (0.4 + t * 0.4) + ')'
+        : 'rgba(240,228,200,0.38)';
+      arcSvg.classList.toggle('glowing', percent > 40);
+    }
+    function updateUserCount(count) {
+      userCountText.textContent = count === 1
+        ? '1 soul present'
+        : count + ' souls present';
+    }
 
-      function setSurfaceDetected() {
-        statusDot.textContent = '◎';
-        statusText.textContent = 'surface found';
-        statusPill.className = 'hud-pill surface-detected';
-        hintPill.textContent = 'tap to place';
-        hintPill.className = 'hud-pill tap-to-place';
-        hintPill.classList.remove('hidden');
-      }
+    document.addEventListener('healing-update', function (e) {
+      var percent   = e.detail.percent;
+      var userCount = e.detail.userCount;
+      updateHealingArc(percent);
+      updateUserCount(userCount);
+      var intensity = Math.max(0, 1 - percent / 100);
+      var tornado   = document.querySelector('[tornado-effect]');
+      var wire      = document.querySelector('[barbed-wire]');
+      var explosion = document.querySelector('[explosion-flash]');
+      var character = document.getElementById('character-root');
+      if (tornado)   tornado.setAttribute('tornado-effect',   'intensity', intensity);
+      if (wire)      wire.setAttribute('barbed-wire',         'intensity', intensity);
+      if (explosion) explosion.setAttribute('explosion-flash','intensity', intensity);
+      if (character) character.setAttribute('character-animator', 'healingPercent', percent);
+    });
 
-      function setPlaced() {
-        statusDot.textContent = '●';
-        statusText.textContent = 'placed';
-        statusPill.className = 'hud-pill placed';
-        hintPill.classList.add('hidden');
-      }
-
-      /* ── Healing arc ──────────────────────────────────────────────── */
-      function updateHealingArc(percent) {
-        var filled = (percent / 100) * ARC_CIRCUMFERENCE;
-        arcProgress.style.strokeDasharray = filled + ' ' + ARC_CIRCUMFERENCE;
-        arcPercent.textContent = Math.round(percent) + '%';
-        var t = percent / 100;
-        var r = Math.round(196 + (212 - 196) * t);
-        var g = Math.round(98  + (168 - 98)  * t);
-        var b = Math.round(45  + (67  - 45)  * t);
-        arcProgress.style.stroke = 'rgb(' + r + ',' + g + ',' + b + ')';
-        arcPercent.style.fill = percent > 50
-          ? 'rgba(212,168,67,' + (0.4 + t * 0.4) + ')'
-          : 'rgba(240,228,200,0.38)';
-        arcSvg.classList.toggle('glowing', percent > 40);
-      }
-
-      function updateUserCount(count) {
-        userCountText.textContent = count === 1
-          ? '1 soul present'
-          : count + ' souls present';
-      }
-
-      /* ── Healing update event (unchanged from old version) ───────── */
-      document.addEventListener('healing-update', function (e) {
-        var percent   = e.detail.percent;
-        var userCount = e.detail.userCount;
-        updateHealingArc(percent);
-        updateUserCount(userCount);
-        var intensity = Math.max(0, 1 - percent / 100);
-        var tornado   = document.querySelector('[tornado-effect]');
-        var wire      = document.querySelector('[barbed-wire]');
-        var explosion = document.querySelector('[explosion-flash]');
-        var character = document.getElementById('character-root');
-        if (tornado)   tornado.setAttribute('tornado-effect',   'intensity', intensity);
-        if (wire)      wire.setAttribute('barbed-wire',         'intensity', intensity);
-        if (explosion) explosion.setAttribute('explosion-flash','intensity', intensity);
-        if (character) character.setAttribute('character-animator', 'healingPercent', percent);
-      });
-
-      /* ── Loading overlay ──────────────────────────────────────────── */
-      var overlayCleared = false;
-      function clearOverlay() {
-        if (overlayCleared) return;
-        overlayCleared = true;
-        overlay.classList.add('fade-out');
-        setTimeout(function () { overlay.classList.add('hidden'); }, 900);
-      }
-      document.addEventListener('character-ready', clearOverlay);
-      setTimeout(clearOverlay, 8000);
-
-      /* ── AR support check ─────────────────────────────────────────── */
-      function showUnsupported(msg) {
-        if (arErrorMsg) arErrorMsg.textContent = msg;
-        arUnsupported.classList.add('visible');
-        if (enterARBtn) enterARBtn.classList.add('hidden');
-      }
-
-      function checkARSupport() {
-        if (!navigator.xr) {
-          showUnsupported('WebXR is not supported in this browser. Try Chrome on Android.');
-          return;
+    /* ── Loading overlay → reveal gateway ───────────────────────── */
+    var overlayCleared = false;
+    function clearOverlay() {
+      if (overlayCleared) return;
+      overlayCleared = true;
+      overlay.classList.add('fade-out');
+      setTimeout(function () {
+        overlay.classList.add('hidden');
+        if (arSupported !== false) {
+          gateway.classList.remove('hidden');
         }
-        navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
-          if (supported) {
-            enterARBtn.classList.remove('hidden');
-            setReadyToEnter();
-          } else {
-            showUnsupported('Immersive AR is not available on this device.');
+      }, 900);
+    }
+    document.addEventListener('character-ready', clearOverlay);
+    setTimeout(clearOverlay, 8000);
+
+    /* ── AR support check ───────────────────────────────────────── */
+    function showUnsupported(msg) {
+      arSupported = false;
+      if (arErrorMsg) arErrorMsg.textContent = msg;
+      arUnsupported.classList.add('visible');
+      gateway.classList.add('hidden');
+    }
+    function checkARSupport() {
+      if (!navigator.xr) {
+        showUnsupported('WebXR is not supported in this browser. Try Chrome on Android.');
+        return;
+      }
+      navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
+        if (supported) {
+          arSupported = true;
+          enterARBtn.removeAttribute('disabled');
+          gatewayStatus.textContent = 'device ready · tap to enter';
+        } else {
+          showUnsupported('Immersive AR is not available on this device.');
+        }
+      }).catch(function () {
+        showUnsupported('Could not detect AR support. Try Chrome on Android 8+.');
+      });
+    }
+
+    /* ── Enter AR — the single required user gesture ────────────── */
+    enterARBtn.addEventListener('click', function () {
+      if (arSupported !== true) return;
+      gateway.classList.add('hidden');
+      var p = scene.enterAR();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function (err) {
+          console.warn('[ar] enterAR failed:', err);
+          gatewayStatus.textContent = 'could not start ar · tap to retry';
+          gateway.classList.remove('hidden');
+        });
+      }
+    });
+
+    /* ── WebXR session start ────────────────────────────────────── */
+    scene.addEventListener('enter-vr', function () {
+      gateway.classList.add('hidden');
+      setSearching();
+      if (!healingSyncStarted && window.HealingSync) {
+        healingSyncStarted = true;
+        window.HealingSync.init().then(function () {
+          var ps = window.HealingSync.getPlacementState();
+          if (ps && ps.placed) {
+            var comp = placementReticle && placementReticle.components
+              && placementReticle.components['webxr-placement'];
+            if (comp && !comp.placed) { comp.autoPlace(); }
           }
-        }).catch(function () {
-          showUnsupported('Could not detect AR support. Try Chrome on Android 8+.');
-        });
+        }).catch(console.error);
       }
+    });
 
-      /* ── Enter AR button ──────────────────────────────────────────── */
-      if (enterARBtn) {
-        enterARBtn.addEventListener('click', function () {
-          enterARBtn.classList.add('hidden');
-          scene.enterAR();
-        });
+    /* ── WebXR session end → return to the gateway ──────────────── */
+    scene.addEventListener('exit-vr', function () {
+      gatewayStatus.textContent = 'session ended · tap to re-enter';
+      gateway.classList.remove('hidden');
+    });
+
+    /* ── Surface detection ──────────────────────────────────────── */
+    document.addEventListener('surface-detected', function () { setSurfaceDetected(); });
+    document.addEventListener('surface-lost',     function () { setSearching(); });
+
+    /* ── Object placed (local tap OR remote auto-place) ─────────── */
+    document.addEventListener('object-placed', function (e) {
+      var pos = e.detail;
+      sceneRoot.object3D.position.set(pos.x, pos.y, pos.z);
+      sceneRoot.setAttribute('visible', 'true');
+      setPlaced();
+      if (!pos.autoPlaced && window.HealingSync) {
+        window.HealingSync.notifyPlaced();
       }
+    });
 
-      /* ── WebXR session start ──────────────────────────────────────── */
-      scene.addEventListener('enter-vr', function () {
-        setSearching();
+    /* ── Remote placement broadcast → auto-place this user ──────── */
+    document.addEventListener('placement-broadcast', function () {
+      var comp = placementReticle && placementReticle.components
+        && placementReticle.components['webxr-placement'];
+      if (comp && !comp.placed) { comp.autoPlace(); }
+    });
 
-        // Start healing sync once (on AR session start)
-        if (!healingSyncStarted && window.HealingSync) {
-          healingSyncStarted = true;
-          window.HealingSync.init().then(function () {
-            // After sync init: check if someone already placed globally
-            var ps = window.HealingSync.getPlacementState();
-            if (ps && ps.placed) {
-              var comp = placementReticle && placementReticle.components
-                && placementReticle.components['webxr-placement'];
-              if (comp && !comp.placed) { comp.autoPlace(); }
-            }
-          }).catch(console.error);
-        }
-      });
+    /* ── Stop taps on HUD controls from also placing the witness ──
+       In dom-overlay mode, tapping an interactive control fires
+       'beforexrselect'; preventing it suppresses the XR 'select'
+       that would otherwise place the model. */
+    function blockSelect(e) { e.preventDefault(); }
+    if (backPill) backPill.addEventListener('beforexrselect', blockSelect);
+    var restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.addEventListener('beforexrselect', blockSelect);
 
-      /* ── Surface detection events ─────────────────────────────────── */
-      document.addEventListener('surface-detected', function () {
-        setSurfaceDetected();
-      });
+    /* ── Scene loaded → check AR support ────────────────────────── */
+    scene.addEventListener('loaded', function () { checkARSupport(); });
 
-      document.addEventListener('surface-lost', function () {
-        setSearching();
-      });
-
-      /* ── Object placed (local tap OR auto from remote broadcast) ──── */
-      document.addEventListener('object-placed', function (e) {
-        var pos = e.detail;
-        // Position the scene group at the placement hit point
-        sceneRoot.object3D.position.set(pos.x, pos.y, pos.z);
-        sceneRoot.setAttribute('visible', 'true');
-        setPlaced();
-        // Broadcast placement to other users (only when user actually tapped, not auto)
-        if (!pos.autoPlaced && window.HealingSync) {
-          window.HealingSync.notifyPlaced();
-        }
-      });
-
-      /* ── Remote placement broadcast → auto-place local user ──────── */
-      document.addEventListener('placement-broadcast', function () {
-        var comp = placementReticle && placementReticle.components
-          && placementReticle.components['webxr-placement'];
-        if (comp && !comp.placed) { comp.autoPlace(); }
-      });
-
-      /* ── Scene loaded → run AR support check ─────────────────────── */
-      scene.addEventListener('loaded', function () {
-        checkARSupport();
-      });
-
-    })();
+  })();
   </script>
 
 </body>
