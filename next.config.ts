@@ -18,6 +18,23 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
+      {
+        // AR page only — CSP letting the open-source 8th Wall engine (jsDelivr CDN),
+        // A-Frame, and Ably realtime load; rest of the site stays CSP-free
+        source: "/ar.html",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "script-src 'self' cdn.jsdelivr.net https://aframe.io https://cdn.ably.com 'unsafe-eval'",
+              "connect-src 'self' cdn.jsdelivr.net *.ably.io wss://*.ably.io",
+              "worker-src 'self' blob:",
+              "img-src 'self' data: blob:",
+              "media-src 'self' blob:",
+            ].join("; "),
+          },
+        ],
+      },
     ];
   },
 };
