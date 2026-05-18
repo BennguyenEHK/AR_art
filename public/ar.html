@@ -14,7 +14,7 @@
     <span>preparing the witness</span>
   </div>
 
-  <!-- HUD top: [souls ←] [scanning center] [→ healing arc] -->
+  <!-- HUD top: [souls ←] [status center] [→ healing arc] -->
   <div id="hud-top">
     <div id="user-count-pill" class="hud-pill">
       <span id="user-dot" style="font-size:8px; color: rgba(120,200,120,0.7)">●</span>
@@ -36,7 +36,7 @@
 
   <!-- HUD bottom: hint + back -->
   <div id="hud-bottom">
-    <div id="hint-pill" class="hud-pill">point camera at hiro marker</div>
+    <div id="hint-pill" class="hud-pill">preparing...</div>
     <a id="back-pill" class="hud-pill" href="/">← return</a>
   </div>
 
@@ -52,113 +52,130 @@
     </div>
   </div>
 
-  <!-- Scripts: defer Ably so it doesn't block A-Frame init; pin AR.js to stable 3.4.5 -->
+  <!-- AR unsupported overlay -->
+  <div id="ar-unsupported">
+    <h2>device not supported</h2>
+    <p id="ar-error-msg">AR is not available</p>
+    <p>requires Chrome on Android 8+ or Safari on iOS 15.4+</p>
+    <a href="/">← return home</a>
+  </div>
+
+  <!-- Scripts: defer Ably so it doesn't block A-Frame init -->
   <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
   <!-- Custom components MUST be registered before <a-scene> is parsed -->
   <script src="js/components.js"></script>
+  <script src="js/webxr-placement.js"></script>
   <script src="js/healing-sync.js"></script>
   <script src="js/end-sequence.js"></script>
 
-  <!-- A-Frame scene: `embedded` is REQUIRED for AR.js to composite the camera video correctly
-       on mobile Chrome. Without it: black screen + VR button appears regardless of vr-mode-ui.
-       sourceWidth/sourceHeight request a 1280x720 camera capture — the extra pixels let the
-       marker detector resolve the Hiro pattern at steeper angles and greater distance. -->
   <a-scene
     id="ar-scene"
-    embedded
+    webxr="requiredFeatures: hit-test; optionalFeatures: local-floor,dom-overlay"
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
-    background="transparent: true"
+    background="color: #000000"
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; detectionMode: mono; trackingMethod: best; sourceWidth: 1280; sourceHeight: 720; debugUIEnabled: false; maxDetectionRate: 60"
   >
-    <!-- Lighting: required for MeshStandardMaterial to render with color -->
+    <!-- Lighting -->
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <!-- Heavy pose smoothing: the marker sits on a static table, so averaging
-         many frames costs no meaningful latency but strongly suppresses tracking
-         jitter. smoothCount=25 averages 25 frames; the wider tolerance/threshold
-         enlarge the dead-band so sub-threshold micro-jitter is ignored entirely. -->
-    <a-marker preset="hiro" id="hiro-marker" smooth="true" smoothCount="40" smoothTolerance="0.03" smoothThreshold="8">
+    <!-- Placement reticle: webxr-placement component manages hit-test + tap-to-place -->
+    <a-entity id="placement-reticle" webxr-placement></a-entity>
 
-      <!-- Main character: position Y=-0.18 shifts lower legs to y=-0.04, sinking
-           feet slightly into the marker plane for a grounded feel (matches dino demo). -->
+    <!-- Scene root: invisible until object-placed event positions + shows it -->
+    <a-entity id="scene-root" visible="false">
       <a-entity
         id="character-root"
         character-animator="healingPercent: 0; mode: a"
         position="0 -0.18 0"
-        rotation="0 0 0"
       ></a-entity>
-
-      <!-- Environmental effects -->
       <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
       <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
       <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+    </a-entity>
 
-    </a-marker>
-
-    <!-- Explicit camera, fixed at the origin with identity rotation. AR.js marker
-         mode positions the MARKER in camera space, so the camera must stay at
-         identity. With no camera declared, A-Frame injects a default one at
-         0 1.6 0 WITH look-controls — the gyroscope then rotates the camera and
-         fights marker tracking, so the model drifts off the Hiro surface. -->
-    <a-entity
-      camera="active: true"
-      position="0 0 0"
-      rotation="0 0 0"
-      look-controls="enabled: false"
-      wasd-controls="enabled: false"
-    ></a-entity>
+    <!-- Camera: WebXR controls this automatically -->
+    <a-entity camera></a-entity>
   </a-scene>
+
+  <!-- Enter AR button: shown after AR support confirmed, hidden after tap -->
+  <button id="enter-ar-btn" class="hidden">
+    <span style="font-size:12px; opacity:0.7">◉</span>
+    enter ar
+  </button>
 
   <script>
     (function () {
-      const scene   = document.getElementById('ar-scene');
-      const marker  = document.getElementById('hiro-marker');
-      const overlay = document.getElementById('loading-overlay');
-      const statusPill = document.getElementById('status-pill');
-      const statusDot  = document.getElementById('status-dot');
-      const statusText = document.getElementById('status-text');
-      const hintPill   = document.getElementById('hint-pill');
-      const arcProgress = document.getElementById('arc-progress');
-      const arcPercent  = document.getElementById('arc-percent');
-      const arcSvg      = document.getElementById('healing-arc');
-      const userCountText = document.getElementById('user-count-text');
+      'use strict';
 
-      const ARC_CIRCUMFERENCE = 2 * Math.PI * 18; // r=18 → 113.097
+      var scene          = document.getElementById('ar-scene');
+      var overlay        = document.getElementById('loading-overlay');
+      var statusPill     = document.getElementById('status-pill');
+      var statusDot      = document.getElementById('status-dot');
+      var statusText     = document.getElementById('status-text');
+      var hintPill       = document.getElementById('hint-pill');
+      var arcProgress    = document.getElementById('arc-progress');
+      var arcPercent     = document.getElementById('arc-percent');
+      var arcSvg         = document.getElementById('healing-arc');
+      var userCountText  = document.getElementById('user-count-text');
+      var enterARBtn     = document.getElementById('enter-ar-btn');
+      var arUnsupported  = document.getElementById('ar-unsupported');
+      var arErrorMsg     = document.getElementById('ar-error-msg');
+      var sceneRoot      = document.getElementById('scene-root');
+      var placementReticle = document.getElementById('placement-reticle');
 
-      function setScanning() {
+      var ARC_CIRCUMFERENCE = 2 * Math.PI * 18;
+      var healingSyncStarted = false;
+
+      /* ── Status helpers ───────────────────────────────────────────── */
+      function setReadyToEnter() {
         statusDot.textContent = '○';
-        statusText.textContent = 'scanning';
-        statusPill.className = 'hud-pill scanning';
+        statusText.textContent = 'ready';
+        statusPill.className = 'hud-pill';
+        hintPill.textContent = 'tap enter ar to begin';
+        hintPill.className = 'hud-pill';
         hintPill.classList.remove('hidden');
       }
 
-      function setLocked() {
+      function setSearching() {
+        statusDot.textContent = '○';
+        statusText.textContent = 'scanning';
+        statusPill.className = 'hud-pill scanning';
+        hintPill.textContent = 'move phone to find a surface';
+        hintPill.className = 'hud-pill';
+        hintPill.classList.remove('hidden');
+      }
+
+      function setSurfaceDetected() {
+        statusDot.textContent = '◎';
+        statusText.textContent = 'surface found';
+        statusPill.className = 'hud-pill surface-detected';
+        hintPill.textContent = 'tap to place';
+        hintPill.className = 'hud-pill tap-to-place';
+        hintPill.classList.remove('hidden');
+      }
+
+      function setPlaced() {
         statusDot.textContent = '●';
-        statusText.textContent = 'locked';
-        statusPill.className = 'hud-pill locked';
+        statusText.textContent = 'placed';
+        statusPill.className = 'hud-pill placed';
         hintPill.classList.add('hidden');
       }
 
+      /* ── Healing arc ──────────────────────────────────────────────── */
       function updateHealingArc(percent) {
-        const filled = (percent / 100) * ARC_CIRCUMFERENCE;
+        var filled = (percent / 100) * ARC_CIRCUMFERENCE;
         arcProgress.style.strokeDasharray = filled + ' ' + ARC_CIRCUMFERENCE;
         arcPercent.textContent = Math.round(percent) + '%';
-
-        // Color lerp: ember (#c4622d) → gold (#d4a843)
-        const t = percent / 100;
-        const r = Math.round(196 + (212 - 196) * t);
-        const g = Math.round(98  + (168 - 98)  * t);
-        const b = Math.round(45  + (67  - 45)  * t);
-        arcProgress.style.stroke = `rgb(${r},${g},${b})`;
+        var t = percent / 100;
+        var r = Math.round(196 + (212 - 196) * t);
+        var g = Math.round(98  + (168 - 98)  * t);
+        var b = Math.round(45  + (67  - 45)  * t);
+        arcProgress.style.stroke = 'rgb(' + r + ',' + g + ',' + b + ')';
         arcPercent.style.fill = percent > 50
-          ? `rgba(212, 168, 67, ${0.4 + t * 0.4})`
-          : 'rgba(240, 228, 200, 0.38)';
-
-        // Glow toggles correctly in both directions
+          ? 'rgba(212,168,67,' + (0.4 + t * 0.4) + ')'
+          : 'rgba(240,228,200,0.38)';
         arcSvg.classList.toggle('glowing', percent > 40);
       }
 
@@ -168,107 +185,117 @@
           : count + ' souls present';
       }
 
-      // Listen for healing updates from healing-sync.js
-      document.addEventListener('healing-update', function(e) {
-        const { percent, userCount } = e.detail;
-
-        // Update healing arc
+      /* ── Healing update event (unchanged from old version) ───────── */
+      document.addEventListener('healing-update', function (e) {
+        var percent   = e.detail.percent;
+        var userCount = e.detail.userCount;
         updateHealingArc(percent);
         updateUserCount(userCount);
-
-        // Update all effect intensities (1 → 0 as healing progresses)
-        const intensity = Math.max(0, 1 - percent / 100);
-
-        const tornado   = document.querySelector('[tornado-effect]');
-        const wire      = document.querySelector('[barbed-wire]');
-        const explosion = document.querySelector('[explosion-flash]');
-        const character = document.getElementById('character-root');
-
-        if (tornado)   tornado.setAttribute('tornado-effect', 'intensity', intensity);
-        if (wire)      wire.setAttribute('barbed-wire', 'intensity', intensity);
-        if (explosion) explosion.setAttribute('explosion-flash', 'intensity', intensity);
+        var intensity = Math.max(0, 1 - percent / 100);
+        var tornado   = document.querySelector('[tornado-effect]');
+        var wire      = document.querySelector('[barbed-wire]');
+        var explosion = document.querySelector('[explosion-flash]');
+        var character = document.getElementById('character-root');
+        if (tornado)   tornado.setAttribute('tornado-effect',   'intensity', intensity);
+        if (wire)      wire.setAttribute('barbed-wire',         'intensity', intensity);
+        if (explosion) explosion.setAttribute('explosion-flash','intensity', intensity);
         if (character) character.setAttribute('character-animator', 'healingPercent', percent);
       });
 
-      // The loading overlay is cleared only once the character GLBs have
-      // loaded (character-animator dispatches `character-ready`). A safety
-      // timeout guarantees the spinner never hangs if a GLB fails to load.
-      let overlayCleared = false;
+      /* ── Loading overlay ──────────────────────────────────────────── */
+      var overlayCleared = false;
       function clearOverlay() {
-        if (overlayCleared) { return; }
+        if (overlayCleared) return;
         overlayCleared = true;
         overlay.classList.add('fade-out');
-        setTimeout(() => overlay.classList.add('hidden'), 900);
+        setTimeout(function () { overlay.classList.add('hidden'); }, 900);
       }
       document.addEventListener('character-ready', clearOverlay);
       setTimeout(clearOverlay, 8000);
 
-      // Scene load handler
+      /* ── AR support check ─────────────────────────────────────────── */
+      function showUnsupported(msg) {
+        if (arErrorMsg) arErrorMsg.textContent = msg;
+        arUnsupported.classList.add('visible');
+        if (enterARBtn) enterARBtn.classList.add('hidden');
+      }
+
+      function checkARSupport() {
+        if (!navigator.xr) {
+          showUnsupported('WebXR is not supported in this browser. Try Chrome on Android.');
+          return;
+        }
+        navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
+          if (supported) {
+            enterARBtn.classList.remove('hidden');
+            setReadyToEnter();
+          } else {
+            showUnsupported('Immersive AR is not available on this device.');
+          }
+        }).catch(function () {
+          showUnsupported('Could not detect AR support. Try Chrome on Android 8+.');
+        });
+      }
+
+      /* ── Enter AR button ──────────────────────────────────────────── */
+      if (enterARBtn) {
+        enterARBtn.addEventListener('click', function () {
+          enterARBtn.classList.add('hidden');
+          scene.enterAR();
+        });
+      }
+
+      /* ── WebXR session start ──────────────────────────────────────── */
+      scene.addEventListener('enter-vr', function () {
+        setSearching();
+
+        // Start healing sync once (on AR session start)
+        if (!healingSyncStarted && window.HealingSync) {
+          healingSyncStarted = true;
+          window.HealingSync.init().then(function () {
+            // After sync init: check if someone already placed globally
+            var ps = window.HealingSync.getPlacementState();
+            if (ps && ps.placed) {
+              var comp = placementReticle && placementReticle.components
+                && placementReticle.components['webxr-placement'];
+              if (comp && !comp.placed) { comp.autoPlace(); }
+            }
+          }).catch(console.error);
+        }
+      });
+
+      /* ── Surface detection events ─────────────────────────────────── */
+      document.addEventListener('surface-detected', function () {
+        setSurfaceDetected();
+      });
+
+      document.addEventListener('surface-lost', function () {
+        setSearching();
+      });
+
+      /* ── Object placed (local tap OR auto from remote broadcast) ──── */
+      document.addEventListener('object-placed', function (e) {
+        var pos = e.detail;
+        // Position the scene group at the placement hit point
+        sceneRoot.object3D.position.set(pos.x, pos.y, pos.z);
+        sceneRoot.setAttribute('visible', 'true');
+        setPlaced();
+        // Broadcast placement to other users (only when user actually tapped, not auto)
+        if (!pos.autoPlaced && window.HealingSync) {
+          window.HealingSync.notifyPlaced();
+        }
+      });
+
+      /* ── Remote placement broadcast → auto-place local user ──────── */
+      document.addEventListener('placement-broadcast', function () {
+        var comp = placementReticle && placementReticle.components
+          && placementReticle.components['webxr-placement'];
+        if (comp && !comp.placed) { comp.autoPlace(); }
+      });
+
+      /* ── Scene loaded → run AR support check ─────────────────────── */
       scene.addEventListener('loaded', function () {
-        setScanning();
-
-        // Start healing sync after scene is ready
-        // HealingSync.init() is deferred until Ably CDN has loaded (scene.loaded fires well after)
-        if (window.HealingSync) {
-          window.HealingSync.init().catch(console.error);
-        }
-      });
-
-      // Adaptive threshold patch — fixes detection failure on glossy/bright surfaces.
-      //
-      // Root cause: ARToolKit defaults to a fixed luminance threshold for binarisation
-      // (black ink vs white paper). A specular highlight on a glossy Hiro marker surface
-      // raises the luminance of dark regions toward the threshold, causing the detector
-      // to misclassify them as white background — the square border appears "broken" and
-      // no contour is found. High ambient light has the same effect globally.
-      //
-      // Fix: AR_LABELING_THRESH_MODE_AUTO_MEDIAN (1) — ARToolKit recomputes the threshold
-      // each detection cycle as the median pixel luminance of the full frame. This self-
-      // corrects for any exposure level because the median always falls between the dark
-      // and light populations regardless of how bright or dim the room is.
-      //
-      // Access path confirmed from AR.js 3.4.5 source:
-      //   scene.systems.arjs._arSession.arContext.arController
-      // arController is created asynchronously so we poll at 100 ms intervals.
-      (function patchAdaptiveThreshold() {
-        var attempts = 0;
-        var check = setInterval(function () {
-          attempts++;
-          var arSystem = scene.systems && scene.systems.arjs;
-          if (!arSystem || !arSystem._arSession) return;
-          var arCtx = arSystem._arSession.arContext;
-          if (!arCtx || !arCtx.arController) {
-            if (attempts > 100) { clearInterval(check); } // give up after ~10 s
-            return;
-          }
-          clearInterval(check);
-          var ctrl = arCtx.arController;
-          if (typeof ctrl.setThresholdMode === 'function') {
-            ctrl.setThresholdMode(1); // AR_LABELING_THRESH_MODE_AUTO_MEDIAN
-          }
-        }, 100);
-      })();
-
-      var markerEverFound   = false;
-      var lightingHintTimer = null;
-
-      marker.addEventListener('markerFound', function () {
-        markerEverFound = true;
-        if (lightingHintTimer) {
-          clearTimeout(lightingHintTimer);
-          lightingHintTimer = null;
-        }
-        // Reset hint text so next scan phase shows the default message
-        hintPill.textContent = 'point camera at hiro marker';
-        setLocked(); // setLocked() hides hintPill; text is ready for next markerLost→setScanning cycle
-      });
-
-      marker.addEventListener('markerLost', function () {
-        setScanning();
-        if (!markerEverFound) { return; }
-        lightingHintTimer = setTimeout(function () {
-          hintPill.textContent = 'try better lighting · flatten the marker';
-        }, 3000);
+        checkARSupport();
       });
 
     })();

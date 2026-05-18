@@ -27,10 +27,10 @@ export default function Home() {
           </h1>
 
           <p className="mt-8 max-w-xl text-lg leading-relaxed text-[color:var(--ink-soft)] sm:text-xl">
-            Print the board. Open this page on any phone with a camera. The
-            statue rises out of the wood and{" "}
-            <span className="text-[color:var(--ink)]">everyone watching sees the same thing,
-            at the same moment.</span>
+            Open on any AR-capable phone. Point at any flat surface — floor,
+            table, ground — and tap to place the witness.{" "}
+            <span className="text-[color:var(--ink)]">Everyone present heals together,
+            in real time.</span>
           </p>
 
           {/* CTA row */}
@@ -67,20 +67,20 @@ export default function Home() {
             <ol className="space-y-3 text-[15px] leading-relaxed text-[color:var(--ink-soft)]">
               <li className="flex gap-3">
                 <span className="font-mono text-[11px] text-[color:var(--accent)]">01</span>
-                Print the marker board (A4 / Letter).
+                Open on Chrome (Android) or Safari (iOS 15.4+).
               </li>
               <li className="flex gap-3">
                 <span className="font-mono text-[11px] text-[color:var(--accent)]">02</span>
-                Lay it flat. Tap{" "}
-                <span className="text-[color:var(--ink)]">Begin AR</span>.
+                Tap <span className="text-[color:var(--ink)]">Begin AR</span> then{" "}
+                <span className="text-[color:var(--ink)]">Enter AR</span>.
               </li>
               <li className="flex gap-3">
                 <span className="font-mono text-[11px] text-[color:var(--accent)]">03</span>
-                Allow camera. Aim at the print.
+                Scan any flat surface. Tap to place.
               </li>
               <li className="flex gap-3">
                 <span className="font-mono text-[11px] text-[color:var(--accent)]">04</span>
-                The statue arrives.
+                The witness arrives. Heal together.
               </li>
             </ol>
           </div>
@@ -92,13 +92,13 @@ export default function Home() {
         <div className="col-span-6 md:col-span-4">
           <p className="tiny-caps">stack</p>
           <p className="mt-2 font-mono text-[12px] leading-relaxed text-[color:var(--ink-soft)]">
-            next.js · three.js · mind‑ar · ably (off)
+            next.js · a-frame · webxr · ably
           </p>
         </div>
         <div className="col-span-6 md:col-span-4 md:col-start-5">
           <p className="tiny-caps">requires</p>
           <p className="mt-2 font-mono text-[12px] leading-relaxed text-[color:var(--ink-soft)]">
-            https · camera · printed marker
+            https · ar-capable device · camera
           </p>
         </div>
         <div className="hidden md:col-span-3 md:col-start-10 md:block text-right">

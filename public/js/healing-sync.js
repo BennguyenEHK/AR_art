@@ -9,6 +9,7 @@
   let _leaderInterval = null;
   let _lastTick = Date.now();
   let _healingComplete = false;
+  var _placementState = { placed: false, t: null };
   const PER_USER_RATE = 100 / 420;
   const MAX_USERS = 25;
 
@@ -133,6 +134,14 @@
         setTimeout(() => window.location.reload(), 600);
       });
 
+      _channel.subscribe('placement-state', function(msg) {
+        if (!msg.data || !msg.data.placed) return;
+        _placementState = { placed: true, t: msg.data.t };
+        document.dispatchEvent(new CustomEvent('placement-broadcast', {
+          detail: { placed: true }
+        }));
+      });
+
       await _channel.presence.enter({ joinedAt: Date.now() });
       _channel.presence.subscribe(() => checkLeadership());
       await checkLeadership();
@@ -152,7 +161,18 @@
       });
     },
 
-    getState() { return { ..._state }; },
+    getState() { return { ..._state, placed: _placementState.placed }; },
+
+    notifyPlaced: function() {
+      _placementState = { placed: true, t: Date.now() };
+      if (_channel) {
+        _channel.publish('placement-state', { placed: true, t: Date.now() });
+      }
+    },
+
+    getPlacementState: function() {
+      return { placed: _placementState.placed, t: _placementState.t };
+    },
 
     // (a) Broadcast reset to all connected clients then reload
     reset() {

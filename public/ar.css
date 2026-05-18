@@ -385,3 +385,109 @@ a-scene > div:not(.a-canvas) {
 
 /* ── Utility ─────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
+
+/* ── Enter AR button ─────────────────────────────────────────────── */
+#enter-ar-btn {
+  position: fixed;
+  bottom: max(env(safe-area-inset-bottom), 5.5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 30px;
+  background: rgba(8, 6, 4, 0.75);
+  border: 1px solid rgba(196, 98, 45, 0.55);
+  border-radius: 9999px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--ember-bright);
+  cursor: pointer;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  animation: btn-breathe 2.8s ease-in-out infinite;
+}
+#enter-ar-btn:hover {
+  color: var(--gold);
+  border-color: rgba(212, 168, 67, 0.65);
+  box-shadow: 0 0 22px rgba(196, 98, 45, 0.3);
+}
+@keyframes btn-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(196, 98, 45, 0.0); }
+  50%       { box-shadow: 0 0 18px 3px rgba(196, 98, 45, 0.18); }
+}
+
+/* ── AR unsupported fallback ─────────────────────────────────────── */
+#ar-unsupported {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--ash);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6rem;
+  padding: 2.4rem;
+  text-align: center;
+}
+#ar-unsupported.visible {
+  display: flex;
+}
+#ar-unsupported h2 {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: clamp(1rem, 4vw, 1.4rem);
+  color: var(--ember);
+  letter-spacing: 0.05em;
+}
+#ar-unsupported p {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  line-height: 1.9;
+  color: var(--text-dim);
+  max-width: 300px;
+}
+#ar-unsupported a {
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(212,168,67,0.3);
+}
+
+/* ── Surface-detected status pill state ──────────────────────────── */
+#status-pill.surface-detected {
+  color: rgba(212, 168, 67, 0.88);
+  border-color: rgba(212, 168, 67, 0.38);
+}
+#status-pill.surface-detected #status-dot {
+  animation: pulse-dot 1s ease-in-out infinite;
+  color: rgba(212, 168, 67, 0.9);
+}
+
+/* ── Tap-to-place hint animation ─────────────────────────────────── */
+#hint-pill.tap-to-place {
+  color: rgba(212, 168, 67, 0.92);
+  border-color: rgba(212, 168, 67, 0.35);
+  animation: hint-tap-pulse 1.6s ease-in-out infinite;
+}
+@keyframes hint-tap-pulse {
+  0%, 100% { border-color: rgba(212, 168, 67, 0.15); }
+  50%       { border-color: rgba(212, 168, 67, 0.55); }
+}
+
+/* ── Placed status ───────────────────────────────────────────────── */
+#status-pill.placed {
+  color: rgba(120, 200, 120, 0.85);
+  border-color: rgba(120, 200, 120, 0.28);
+}
+#status-pill.placed #status-dot {
+  animation: none;
+  color: rgba(120, 200, 120, 0.85);
+}
+
+/* ── AR.js video override no longer needed (WebXR handles passthrough) */
+/* Keep the rules harmless — they just won't match any elements in WebXR mode */
