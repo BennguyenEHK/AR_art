@@ -195,6 +195,8 @@ def add_wound_cracks(material):
     FRONT_OFFSET nudges the ribbons toward the face front so the low-poly
     head facets do not occlude them; tune in Blender if needed.
     """
+    # Mapping: Three.js (x, y_up, z) -> Blender (x, y_depth, z_up)
+    #   i.e. Three.js Y becomes Blender Z; Three.js Z becomes Blender Y.
     # (start_xyz, end_xyz) in Blender Z-up coordinates
     segments = [
         ((0.02, 0.14, 0.76), (0.09, 0.14, 0.71)),
@@ -203,7 +205,7 @@ def add_wound_cracks(material):
         ((0.02, 0.14, 0.69), (-0.03, 0.12, 0.65)),
     ]
     WIDTH = 0.006
-    FRONT_OFFSET = 0.04
+    FRONT_OFFSET = 0.06
 
     mesh = bpy.data.meshes.new('wound_cracks_mesh')
     obj = bpy.data.objects.new('wound_cracks', mesh)
