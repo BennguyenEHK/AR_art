@@ -338,14 +338,14 @@
       // Head
       var head = mk(new THREE.SphereGeometry(0.12, 6, 5), 0x5c3d2e);
       head.position.set(0, 0.68, 0.08);
-      head.rotation.x = 0.32;
+      head.rotation.x = 0.08;
       group.add(head);
       this.headMesh = head;
 
       // Torso
       var torso = mk(new THREE.BoxGeometry(0.30, 0.32, 0.18), 0x2a2218);
       torso.position.set(0, 0.38, 0.02);
-      torso.rotation.x = 0.12;
+      torso.rotation.x = -0.10;
       group.add(torso);
       this.torsoMesh = torso;
 
