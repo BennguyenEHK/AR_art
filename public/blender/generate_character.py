@@ -281,6 +281,7 @@ def build_mode_a():
     skin_dark   = make_material('a_skin',    '#5C3D2E', roughness=0.9)
     cloth_dark  = make_material('a_cloth',   '#2A2218', roughness=1.0)
     gun_mat     = make_material('a_gun',     '#1A1A1A', roughness=0.6, metalness=0.4)
+    wood_mat    = make_material('a_gun_wood','#5C3010', roughness=0.85)
 
     parts = []
 
@@ -365,25 +366,71 @@ def build_mode_a():
     )
     parts.append(arm_right)
 
-    # --- Gun (right hand area) ---
-    # Gun body
+    # --- AK-47 rifle (resting across knees) ---
+    # Character sits with upper-leg centres at Z=0.30, Y=0.25.
+    # Lap surface sits ~0.065 above that → gun centred at Z=0.365, Y=0.27.
+    # Gun is oriented along the X-axis (barrel toward -X, stock toward +X).
+    GX, GY, GZ = -0.02, 0.27, 0.365   # receiver centre on the lap
+
+    # Receiver — the main body of the rifle
     gun_body = add_cube(
         'gun_body',
-        location=(0.26, 0.22, 0.30),
-        rotation=(0.3, 0.3, 0.5),
-        dimensions=(0.16, 0.05, 0.05),
+        location=(GX, GY, GZ),
+        rotation=(0, 0, 0.06),
+        dimensions=(0.26, 0.055, 0.068),
         material=gun_mat
     )
     parts.append(gun_body)
-    # Gun barrel (extends forward from body)
-    gun_barrel = add_cube(
+
+    # Barrel — long thin cylinder from front of receiver toward muzzle (−X)
+    gun_barrel = add_cylinder(
         'gun_barrel',
-        location=(0.32, 0.18, 0.28),
-        rotation=(0.3, 0.3, 0.5),
-        dimensions=(0.035, 0.035, 0.12),
+        location=(GX - 0.205, GY - 0.006, GZ + 0.004),
+        rotation=(0, math.pi / 2, 0.06),
+        radius=0.015, depth=0.21, vertices=6,
         material=gun_mat
     )
     parts.append(gun_barrel)
+
+    # Gas tube — thin cylinder above barrel (AK-47 characteristic detail)
+    gun_gas_tube = add_cylinder(
+        'gun_gas_tube',
+        location=(GX - 0.155, GY - 0.009, GZ + 0.038),
+        rotation=(0, math.pi / 2, 0.06),
+        radius=0.009, depth=0.16, vertices=5,
+        material=gun_mat
+    )
+    parts.append(gun_gas_tube)
+
+    # Curved 30-round magazine — hangs below receiver, angled slightly forward
+    gun_magazine = add_cube(
+        'gun_magazine',
+        location=(GX - 0.02, GY + 0.014, GZ - 0.082),
+        rotation=(-0.20, 0, 0.06),
+        dimensions=(0.068, 0.042, 0.13),
+        material=gun_mat
+    )
+    parts.append(gun_magazine)
+
+    # Pistol grip — angled wood grip below rear of receiver
+    gun_grip = add_cube(
+        'gun_grip',
+        location=(GX + 0.065, GY + 0.012, GZ - 0.072),
+        rotation=(-0.32, 0, 0.06),
+        dimensions=(0.042, 0.038, 0.088),
+        material=wood_mat
+    )
+    parts.append(gun_grip)
+
+    # Wooden stock — extends from the right of the receiver (butt-end)
+    gun_stock = add_cube(
+        'gun_stock',
+        location=(GX + 0.185, GY - 0.002, GZ - 0.004),
+        rotation=(0.04, 0, 0.06),
+        dimensions=(0.145, 0.038, 0.052),
+        material=wood_mat
+    )
+    parts.append(gun_stock)
 
     # --- Wound cracks (face) ---
     wound_mat = make_material('a_wound', '#8B2020', roughness=0.8)
