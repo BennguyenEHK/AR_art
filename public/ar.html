@@ -40,8 +40,8 @@
   </div>
 
   <!-- DOM overlay root: the ONLY DOM subtree visible during the immersive AR
-       session. Declared BEFORE <a-scene> so the webxr overlayElement selector
-       resolves when the scene initialises. -->
+       session. Declared BEFORE the scene mounts so the webxr overlayElement
+       selector resolves when the scene initialises. -->
   <div id="ar-overlay">
     <div id="hud-top">
       <div id="user-count-pill" class="hud-pill">
@@ -79,51 +79,100 @@
     </div>
   </div>
 
-  <!-- Scripts: defer Ably so it doesn't block A-Frame init. Custom components
-       MUST be registered before <a-scene> is parsed. -->
+  <!-- Scene mount point. ar-bootstrap.js clones the engine-matched
+       <template> below into here once the engine scripts have loaded. -->
+  <div id="ar-stage"></div>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       Scene templates. <template> content is inert — A-Frame does not
+       parse it until ar-bootstrap.js clones it into #ar-stage. Exactly
+       one is used per page load, chosen by engine detection.
+       ────────────────────────────────────────────────────────────── -->
+
+  <!-- WebXR scene (primary: Android Chrome / native ARCore) -->
+  <template id="tmpl-scene-webxr">
+    <a-scene
+      id="ar-scene"
+      webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor; overlayElement: #ar-overlay"
+      renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
+      background="color: #000000"
+      vr-mode-ui="enabled: false"
+    >
+      <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
+      <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
+
+      <!-- Placement reticle: webxr-placement manages hit-test + tap-to-place -->
+      <a-entity id="placement-reticle" webxr-placement></a-entity>
+
+      <!-- Scene root: invisible until object-placed positions + reveals it -->
+      <a-entity id="scene-root" visible="false">
+        <a-entity
+          id="character-root"
+          character-animator="healingPercent: 0; mode: a"
+          position="0 -0.18 0"
+        ></a-entity>
+        <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
+        <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
+        <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+      </a-entity>
+
+      <a-entity camera></a-entity>
+    </a-scene>
+  </template>
+
+  <!-- 8th Wall scene (fallback: iOS Safari / any non-WebXR device) -->
+  <template id="tmpl-scene-eighthwall">
+    <a-scene
+      id="ar-scene"
+      xrweb="allowedDevices: any"
+      landing-page
+      xrextras-loading
+      xrextras-runtime-error
+      renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false; colorManagement: true"
+      vr-mode-ui="enabled: false"
+    >
+      <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
+      <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
+
+      <!-- invisible ground plane: the raycast target for placement (.cantap) -->
+      <a-entity id="ar-ground" class="cantap"
+                geometry="primitive: plane; width: 1000; height: 1000"
+                rotation="-90 0 0"
+                material="visible: false"></a-entity>
+
+      <a-entity id="placement-reticle" eighth-wall-placement></a-entity>
+
+      <!-- Scene root: invisible until object-placed positions + reveals it -->
+      <a-entity id="scene-root" visible="false">
+        <a-entity id="character-root" character-animator="healingPercent: 0; mode: a" position="0 -0.18 0"></a-entity>
+        <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
+        <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
+        <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+      </a-entity>
+
+      <!-- camera Y MUST be non-zero (8th Wall: sets content scale + ground ref);
+           position matches the official 8thwall world-effects example -->
+      <a-camera position="0 8 8"
+                cursor="rayOrigin: mouse; fuse: false"
+                raycaster="objects: .cantap"></a-camera>
+    </a-scene>
+  </template>
+
+  <!-- Scripts: defer Ably so it doesn't block engine bootstrap. The engine
+       script chain (A-Frame build, components, placement adapter, sync) is
+       loaded dynamically by ar-bootstrap.js once the engine is chosen. -->
   <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="js/components.js"></script>
-  <script src="js/webxr-placement.js"></script>
-  <script src="js/healing-sync.js"></script>
-  <script src="js/end-sequence.js"></script>
-
-  <a-scene
-    id="ar-scene"
-    webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor; overlayElement: #ar-overlay"
-    renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
-    background="color: #000000"
-    vr-mode-ui="enabled: false"
-  >
-    <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
-    <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
-
-    <!-- Placement reticle: webxr-placement manages hit-test + tap-to-place -->
-    <a-entity id="placement-reticle" webxr-placement></a-entity>
-
-    <!-- Scene root: invisible until object-placed positions + reveals it -->
-    <a-entity id="scene-root" visible="false">
-      <a-entity
-        id="character-root"
-        character-animator="healingPercent: 0; mode: a"
-        position="0 -0.18 0"
-      ></a-entity>
-      <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
-      <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
-      <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
-    </a-entity>
-
-    <a-entity camera></a-entity>
-  </a-scene>
+  <script src="js/ar-bootstrap.js"></script>
 
   <script>
   (function () {
     'use strict';
 
-    var scene          = document.getElementById('ar-scene');
+    /* Engine-agnostic HUD logic. Engine detection, the Enter-AR button, and
+       session start all live in ar-bootstrap.js. This script talks to the
+       AR layer only through CustomEvents on `document`. */
+
     var overlay        = document.getElementById('loading-overlay');
-    var gateway        = document.getElementById('enter-gateway');
-    var gatewayStatus  = document.getElementById('gateway-status');
     var statusPill     = document.getElementById('status-pill');
     var statusDot      = document.getElementById('status-dot');
     var statusText     = document.getElementById('status-text');
@@ -132,16 +181,9 @@
     var arcPercent     = document.getElementById('arc-percent');
     var arcSvg         = document.getElementById('healing-arc');
     var userCountText  = document.getElementById('user-count-text');
-    var enterARBtn     = document.getElementById('enter-ar-btn');
-    var arUnsupported  = document.getElementById('ar-unsupported');
-    var arErrorMsg     = document.getElementById('ar-error-msg');
-    var backPill       = document.getElementById('back-pill');
-    var sceneRoot      = document.getElementById('scene-root');
-    var placementReticle = document.getElementById('placement-reticle');
 
     var ARC_CIRCUMFERENCE = 2 * Math.PI * 18;
     var healingSyncStarted = false;
-    var arSupported = null;
 
     /* ── Status helpers ─────────────────────────────────────────── */
     function setSearching() {
@@ -204,7 +246,9 @@
       if (character) character.setAttribute('character-animator', 'healingPercent', percent);
     });
 
-    /* ── Loading overlay → reveal gateway ───────────────────────── */
+    /* ── Loading overlay clearing ───────────────────────────────── */
+    /* ar-bootstrap.js owns engine detection and gateway visibility; this
+       only fades the loading overlay away once the scene is ready. */
     var overlayCleared = false;
     function clearOverlay() {
       if (overlayCleared) return;
@@ -212,74 +256,27 @@
       overlay.classList.add('fade-out');
       setTimeout(function () {
         overlay.classList.add('hidden');
-        if (arSupported !== false) {
-          gateway.classList.remove('hidden');
-        }
       }, 900);
     }
     document.addEventListener('character-ready', clearOverlay);
     setTimeout(clearOverlay, 8000);
 
-    /* ── AR support check ───────────────────────────────────────── */
-    function showUnsupported(msg) {
-      arSupported = false;
-      if (arErrorMsg) arErrorMsg.textContent = msg;
-      arUnsupported.classList.add('visible');
-      gateway.classList.add('hidden');
-    }
-    function checkARSupport() {
-      if (!navigator.xr) {
-        showUnsupported('WebXR is not supported in this browser. Try Chrome on Android.');
-        return;
-      }
-      navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
-        if (supported) {
-          arSupported = true;
-          enterARBtn.removeAttribute('disabled');
-          gatewayStatus.textContent = 'device ready · tap to enter';
-        } else {
-          showUnsupported('Immersive AR is not available on this device.');
-        }
-      }).catch(function () {
-        showUnsupported('Could not detect AR support. Try Chrome on Android 8+.');
-      });
-    }
-
-    /* ── Enter AR — the single required user gesture ────────────── */
-    enterARBtn.addEventListener('click', function () {
-      if (arSupported !== true) return;
-      gateway.classList.add('hidden');
-      var p = scene.enterAR();
-      if (p && typeof p.catch === 'function') {
-        p.catch(function (err) {
-          console.warn('[ar] enterAR failed:', err);
-          gatewayStatus.textContent = 'could not start ar · tap to retry';
-          gateway.classList.remove('hidden');
-        });
-      }
-    });
-
-    /* ── WebXR session start ────────────────────────────────────── */
-    scene.addEventListener('enter-vr', function () {
-      gateway.classList.add('hidden');
+    /* ── AR session start (unified across both engines) ─────────── */
+    document.addEventListener('ar-session-started', function () {
       setSearching();
       if (!healingSyncStarted && window.HealingSync) {
         healingSyncStarted = true;
         window.HealingSync.init().then(function () {
           var ps = window.HealingSync.getPlacementState();
           if (ps && ps.placed) {
-            var comp = placementReticle && placementReticle.components
-              && placementReticle.components['webxr-placement'];
+            var reticle = document.getElementById('placement-reticle');
+            var comp = reticle && reticle.components &&
+              (reticle.components['webxr-placement'] ||
+               reticle.components['eighth-wall-placement']);
             if (comp && !comp.placed) { comp.autoPlace(); }
           }
         }).catch(console.error);
       }
-    });
-
-    /* ── WebXR session end → return to the gateway ──────────────── */
-    scene.addEventListener('exit-vr', function () {
-      gatewayStatus.textContent = 'session ended · tap to re-enter';
-      gateway.classList.remove('hidden');
     });
 
     /* ── Surface detection ──────────────────────────────────────── */
@@ -289,6 +286,10 @@
     /* ── Object placed (local tap OR remote auto-place) ─────────── */
     document.addEventListener('object-placed', function (e) {
       var pos = e.detail;
+      /* Look up #scene-root lazily — the scene is injected by the
+         bootstrap after this script parses. */
+      var sceneRoot = document.getElementById('scene-root');
+      if (!sceneRoot) return;
       sceneRoot.object3D.position.set(pos.x, pos.y, pos.z);
       sceneRoot.setAttribute('visible', 'true');
       setPlaced();
@@ -298,23 +299,14 @@
     });
 
     /* ── Remote placement broadcast → auto-place this user ──────── */
+    /* Engine-agnostic: drives whichever placement adapter is mounted. */
     document.addEventListener('placement-broadcast', function () {
-      var comp = placementReticle && placementReticle.components
-        && placementReticle.components['webxr-placement'];
+      var reticle = document.getElementById('placement-reticle');
+      var comp = reticle && reticle.components &&
+        (reticle.components['webxr-placement'] ||
+         reticle.components['eighth-wall-placement']);
       if (comp && !comp.placed) { comp.autoPlace(); }
     });
-
-    /* ── Stop taps on HUD controls from also placing the witness ──
-       In dom-overlay mode, tapping an interactive control fires
-       'beforexrselect'; preventing it suppresses the XR 'select'
-       that would otherwise place the model. */
-    function blockSelect(e) { e.preventDefault(); }
-    if (backPill) backPill.addEventListener('beforexrselect', blockSelect);
-    var restartBtn = document.getElementById('restart-btn');
-    if (restartBtn) restartBtn.addEventListener('beforexrselect', blockSelect);
-
-    /* ── Scene loaded → check AR support ────────────────────────── */
-    scene.addEventListener('loaded', function () { checkARSupport(); });
 
   })();
   </script>
