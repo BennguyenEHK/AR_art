@@ -18,25 +18,6 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
       },
-      {
-        // AR page only — CSP letting the open-source 8th Wall engine load:
-        // the engine binary + xrextras/landing-page come from jsDelivr, the
-        // 8frame A-Frame build from 8th Wall's own CDN, and Ably realtime
-        // from its CDN. The rest of the site stays CSP-free.
-        source: "/ar.html",
-        headers: [
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "script-src 'self' cdn.jsdelivr.net cdn.8thwall.com https://cdn.ably.com 'unsafe-eval'",
-              "connect-src 'self' cdn.jsdelivr.net cdn.8thwall.com *.ably.io wss://*.ably.io",
-              "worker-src 'self' blob: cdn.jsdelivr.net cdn.8thwall.com",
-              "img-src 'self' data: blob: cdn.jsdelivr.net cdn.8thwall.com",
-              "media-src 'self' blob:",
-            ].join("; "),
-          },
-        ],
-      },
     ];
   },
 };

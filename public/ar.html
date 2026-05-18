@@ -14,9 +14,9 @@
     <span>preparing the witness</span>
   </div>
 
-  <!-- Entry gateway: the single user-gesture threshold. 8th Wall starts the
-       camera via getUserMedia, which browsers only grant from a user gesture
-       inside THIS document — it cannot be inherited from the home page. -->
+  <!-- Entry gateway: the single WebXR user-gesture threshold. WebXR requires a
+       user gesture inside THIS document to start an immersive session — it
+       cannot be inherited from the home page navigation. -->
   <div id="enter-gateway" class="hidden">
     <div class="gateway-grain"></div>
     <div class="gateway-inner">
@@ -39,9 +39,9 @@
     <a href="/">← return home</a>
   </div>
 
-  <!-- HUD overlay root: the DOM subtree layered over the 8th Wall camera feed
-       during the AR session. 8th Wall renders the camera + 3D scene into the
-       <a-scene> canvas; this overlay sits above it as ordinary page DOM. -->
+  <!-- DOM overlay root: the ONLY DOM subtree visible during the immersive AR
+       session. Declared BEFORE <a-scene> so the webxr overlayElement selector
+       resolves when the scene initialises. -->
   <div id="ar-overlay">
     <div id="hud-top">
       <div id="user-count-pill" class="hud-pill">
@@ -79,46 +79,27 @@
     </div>
   </div>
 
-  <!-- Scripts — load order is load-bearing:
-       1. Ably (deferred; multiplayer, independent of the AR engine).
-       2. 8frame — 8th Wall's forked A-Frame build. The OSS engine patches
-          this build's WebGLRenderer; stock A-Frame is NOT supported. Must
-          run before the engine AND before our components.
-       3. xrextras — provides the `xrextras-loading` / `xrextras-runtime-error`
-          A-Frame components (a SEPARATE package from the engine binary).
-       4. landing-page — device-support gate + the user-gesture'd camera
-          start. This is what lets getUserMedia succeed on iOS Safari.
-       5. engine-binary (xr.js) — the SLAM engine; async, auto-registers the
-          `xrweb` component onto 8frame once it loads.
-       6. our components — must be registered before <a-scene> is parsed. -->
+  <!-- Scripts: defer Ably so it doesn't block A-Frame init. Custom components
+       MUST be registered before <a-scene> is parsed. -->
   <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
-  <script src="https://cdn.8thwall.com/web/aframe/8frame-1.5.0.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js"
-          async crossorigin="anonymous"
-          data-preload-chunks="slam"
-          onerror="(function(){var u=document.getElementById('ar-unsupported'),m=document.getElementById('ar-error-msg');if(m)m.textContent='Could not load AR engine. Check your connection and reload.';if(u)u.classList.add('visible');var g=document.getElementById('enter-gateway');if(g)g.classList.add('hidden');})()"></script>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="js/components.js"></script>
-  <script src="js/eighth-wall-placement.js"></script>
+  <script src="js/webxr-placement.js"></script>
   <script src="js/healing-sync.js"></script>
   <script src="js/end-sequence.js"></script>
 
   <a-scene
     id="ar-scene"
-    xrweb="allowedDevices: any"
-    landing-page
-    xrextras-loading
-    xrextras-runtime-error
+    webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor; overlayElement: #ar-overlay"
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
+    background="color: #000000"
     vr-mode-ui="enabled: false"
   >
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-    <!-- Placement reticle: eighth-wall-placement manages 8th Wall surface
-         tracking + tap-to-place -->
-    <a-entity id="placement-reticle" eighth-wall-placement></a-entity>
+    <!-- Placement reticle: webxr-placement manages hit-test + tap-to-place -->
+    <a-entity id="placement-reticle" webxr-placement></a-entity>
 
     <!-- Scene root: invisible until object-placed positions + reveals it -->
     <a-entity id="scene-root" visible="false">
@@ -154,6 +135,7 @@
     var enterARBtn     = document.getElementById('enter-ar-btn');
     var arUnsupported  = document.getElementById('ar-unsupported');
     var arErrorMsg     = document.getElementById('ar-error-msg');
+    var backPill       = document.getElementById('back-pill');
     var sceneRoot      = document.getElementById('scene-root');
     var placementReticle = document.getElementById('placement-reticle');
 
@@ -246,35 +228,39 @@
       gateway.classList.add('hidden');
     }
     function checkARSupport() {
-      // 8th Wall runs on getUserMedia + JS SLAM (not WebXR), so the only
-      // hard requirement here is camera-capable mediaDevices. Deeper
-      // failures (WebGL, SLAM init, permissions) are surfaced by 8th Wall's
-      // own xrextras-runtime-error UI once the session starts.
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        arSupported = true;
-        enterARBtn.removeAttribute('disabled');
-        gatewayStatus.textContent = 'device ready · tap to enter';
-      } else {
-        showUnsupported('Camera access is not available in this browser. Try Safari on iOS 15.4+ or Chrome on Android 8+.');
+      if (!navigator.xr) {
+        showUnsupported('WebXR is not supported in this browser. Try Chrome on Android.');
+        return;
       }
+      navigator.xr.isSessionSupported('immersive-ar').then(function (supported) {
+        if (supported) {
+          arSupported = true;
+          enterARBtn.removeAttribute('disabled');
+          gatewayStatus.textContent = 'device ready · tap to enter';
+        } else {
+          showUnsupported('Immersive AR is not available on this device.');
+        }
+      }).catch(function () {
+        showUnsupported('Could not detect AR support. Try Chrome on Android 8+.');
+      });
     }
 
-    /* ── Enter AR ──────────────────────────────────────────────────
-       The custom gateway is the artistic intro — it does NOT start the
-       camera itself. Dismissing it reveals 8th Wall's `landing-page`,
-       which provides the user-gesture'd getUserMedia start that iOS
-       Safari requires. `xrweb` + `landing-page` own session startup;
-       the A-Frame integration has no manual start call to make here. */
+    /* ── Enter AR — the single required user gesture ────────────── */
     enterARBtn.addEventListener('click', function () {
       if (arSupported !== true) return;
       gateway.classList.add('hidden');
+      var p = scene.enterAR();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function (err) {
+          console.warn('[ar] enterAR failed:', err);
+          gatewayStatus.textContent = 'could not start ar · tap to retry';
+          gateway.classList.remove('hidden');
+        });
+      }
     });
 
-    /* ── 8th Wall session start ─────────────────────────────────────
-       8th Wall fires 'realityready' on the scene once the camera feed
-       and SLAM tracking are live — this is the session-start signal
-       (the 8th Wall equivalent of WebXR's 'enter-vr'). */
-    scene.addEventListener('realityready', function () {
+    /* ── WebXR session start ────────────────────────────────────── */
+    scene.addEventListener('enter-vr', function () {
       gateway.classList.add('hidden');
       setSearching();
       if (!healingSyncStarted && window.HealingSync) {
@@ -283,19 +269,18 @@
           var ps = window.HealingSync.getPlacementState();
           if (ps && ps.placed) {
             var comp = placementReticle && placementReticle.components
-              && placementReticle.components['eighth-wall-placement'];
+              && placementReticle.components['webxr-placement'];
             if (comp && !comp.placed) { comp.autoPlace(); }
           }
         }).catch(console.error);
       }
     });
 
-    /* ── Session errors ────────────────────────────────────────────
-       8th Wall does not emit a scene-level 'xrerror' DOM event and has
-       no 'exit-vr' equivalent. Runtime/camera errors are owned by the
-       `xrextras-runtime-error` component (its own overlay UI); a CDN-
-       unreachable engine is caught by the <script onerror> above. No
-       additional session-error handler is needed here. */
+    /* ── WebXR session end → return to the gateway ──────────────── */
+    scene.addEventListener('exit-vr', function () {
+      gatewayStatus.textContent = 'session ended · tap to re-enter';
+      gateway.classList.remove('hidden');
+    });
 
     /* ── Surface detection ──────────────────────────────────────── */
     document.addEventListener('surface-detected', function () { setSurfaceDetected(); });
@@ -315,15 +300,18 @@
     /* ── Remote placement broadcast → auto-place this user ──────── */
     document.addEventListener('placement-broadcast', function () {
       var comp = placementReticle && placementReticle.components
-        && placementReticle.components['eighth-wall-placement'];
+        && placementReticle.components['webxr-placement'];
       if (comp && !comp.placed) { comp.autoPlace(); }
     });
 
-    /* ── HUD tap blocking ───────────────────────────────────────────
-       The old 'beforexrselect' blockers were WebXR dom-overlay specific.
-       8th Wall renders the HUD as ordinary page DOM above the camera
-       canvas, so taps on #back-pill / #restart-btn no longer leak into
-       placement — no blocker needed. */
+    /* ── Stop taps on HUD controls from also placing the witness ──
+       In dom-overlay mode, tapping an interactive control fires
+       'beforexrselect'; preventing it suppresses the XR 'select'
+       that would otherwise place the model. */
+    function blockSelect(e) { e.preventDefault(); }
+    if (backPill) backPill.addEventListener('beforexrselect', blockSelect);
+    var restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.addEventListener('beforexrselect', blockSelect);
 
     /* ── Scene loaded → check AR support ────────────────────────── */
     scene.addEventListener('loaded', function () { checkARSupport(); });
