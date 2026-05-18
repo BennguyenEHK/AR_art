@@ -357,20 +357,6 @@
       this._loadCount            = 0;
       this.pendingHealingPercent = this.data.healingPercent;
 
-      // Shadow disc — flat circle at Y=0.001 visually anchors character to marker surface
-      var shadowGeo = new THREE.CircleGeometry(0.22, 32);
-      var shadowMat = new THREE.MeshBasicMaterial({
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.30,
-        side: THREE.DoubleSide,
-        depthWrite: false
-      });
-      this.shadowDisc = new THREE.Mesh(shadowGeo, shadowMat);
-      this.shadowDisc.rotation.x = -Math.PI / 2; // lay flat in XZ plane
-      this.shadowDisc.position.y = 0.001;
-      this.el.object3D.add(this.shadowDisc);
-
       this.loadCharacterModels();
     },
 
@@ -390,9 +376,6 @@
       loader.load(
         'models/character-mode-a.glb',
         function (gltf) {
-          var box = new self.THREE.Box3().setFromObject(gltf.scene);
-          var size = box.getSize(new self.THREE.Vector3());
-          console.log('[character-animator] Mode A bounds — min.y:', box.min.y.toFixed(3), 'max.y:', box.max.y.toFixed(3), 'height:', size.y.toFixed(3));
           self.groupA.add(gltf.scene);
           self.bindModeA(gltf.scene);
           self.onGlbLoaded();
@@ -558,10 +541,10 @@
       var dt = delta / 1000;
 
       // Mode A idle breathing (before the transition begins)
-      // Rotation sway/slumpRock removed — they compound AR.js tracking noise into visible jitter.
-      // Only scale-based torso breathing is kept; it produces no world-space rotation error.
       if (!this.modeBStarted && this.groupA.visible) {
-        var breathe = Math.sin(time * 0.00157) * 0.006;
+        var breathe   = Math.sin(time * 0.00157) * 0.006;
+        var sway      = Math.sin(time * 0.00094) * 0.004;
+        var slumpRock = Math.sin(time * 0.00063) * 0.003;
 
         if (this.torsoMesh) {
           var trp = this.torsoMesh.userData.restPos;
@@ -572,6 +555,8 @@
         if (this.headMesh) {
           this.headMesh.position.y = this.headMesh.userData.restPos.y + breathe;
         }
+        this.groupA.rotation.z = sway;
+        this.groupA.rotation.x = slumpRock;
 
         if (this.crackMat) {
           var baseOpacity = 1 - (this.data.healingPercent / 100);
@@ -626,7 +611,6 @@
 
         if (this.flyElapsed >= this.FLY_DURATION) {
           this.flyingUp = false;
-          if (this.shadowDisc) { this.shadowDisc.visible = false; }
           document.dispatchEvent(new CustomEvent('mode-b-complete'));
         }
       }
@@ -637,12 +621,6 @@
      * ------------------------------------------------------------------ */
     remove: function () {
       var self = this;
-      if (this.shadowDisc) {
-        this.el.object3D.remove(this.shadowDisc);
-        this.shadowDisc.geometry.dispose();
-        this.shadowDisc.material.dispose();
-        this.shadowDisc = null;
-      }
       var disposeGroup = function (group) {
         group.traverse(function (child) {
           if (child.isMesh) {
