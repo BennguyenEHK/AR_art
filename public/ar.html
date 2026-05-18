@@ -79,16 +79,26 @@
     </div>
   </div>
 
-  <!-- Scripts: defer Ably so it doesn't block A-Frame init. The 8th Wall
-       engine binary MUST load before A-Frame — it registers the `xrweb`
-       system and `xrextras-*` globals A-Frame consumes. Custom components
-       MUST be registered before <a-scene> is parsed. -->
+  <!-- Scripts — load order is load-bearing:
+       1. Ably (deferred; multiplayer, independent of the AR engine).
+       2. 8frame — 8th Wall's forked A-Frame build. The OSS engine patches
+          this build's WebGLRenderer; stock A-Frame is NOT supported. Must
+          run before the engine AND before our components.
+       3. xrextras — provides the `xrextras-loading` / `xrextras-runtime-error`
+          A-Frame components (a SEPARATE package from the engine binary).
+       4. landing-page — device-support gate + the user-gesture'd camera
+          start. This is what lets getUserMedia succeed on iOS Safari.
+       5. engine-binary (xr.js) — the SLAM engine; async, auto-registers the
+          `xrweb` component onto 8frame once it loads.
+       6. our components — must be registered before <a-scene> is parsed. -->
   <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
+  <script src="https://cdn.8thwall.com/web/aframe/8frame-1.5.0.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js"
           async crossorigin="anonymous"
           data-preload-chunks="slam"
           onerror="(function(){var u=document.getElementById('ar-unsupported'),m=document.getElementById('ar-error-msg');if(m)m.textContent='Could not load AR engine. Check your connection and reload.';if(u)u.classList.add('visible');var g=document.getElementById('enter-gateway');if(g)g.classList.add('hidden');})()"></script>
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   <script src="js/components.js"></script>
   <script src="js/eighth-wall-placement.js"></script>
   <script src="js/healing-sync.js"></script>
@@ -97,11 +107,10 @@
   <a-scene
     id="ar-scene"
     xrweb="allowedDevices: any"
-    xrextras-tap-recenter
+    landing-page
     xrextras-loading
     xrextras-runtime-error
     renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
-    background="color: #000000"
     vr-mode-ui="enabled: false"
   >
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
@@ -250,28 +259,15 @@
       }
     }
 
-    /* ── Enter AR — the single required user gesture ──────────────
-       8th Wall needs a user gesture to call getUserMedia. We start the
-       camera session here. The xrweb A-Frame system also auto-starts on
-       scene load, so if no explicit start hook is available the gateway
-       tap simply dismisses the gateway and lets xrweb run itself. */
+    /* ── Enter AR ──────────────────────────────────────────────────
+       The custom gateway is the artistic intro — it does NOT start the
+       camera itself. Dismissing it reveals 8th Wall's `landing-page`,
+       which provides the user-gesture'd getUserMedia start that iOS
+       Safari requires. `xrweb` + `landing-page` own session startup;
+       the A-Frame integration has no manual start call to make here. */
     enterARBtn.addEventListener('click', function () {
       if (arSupported !== true) return;
       gateway.classList.add('hidden');
-      try {
-        var xrwebSystem = scene && scene.systems && scene.systems.xrweb;
-        if (xrwebSystem && typeof xrwebSystem.run === 'function') {
-          xrwebSystem.run();
-        } else if (window.XR8 && typeof window.XR8.run === 'function') {
-          // Direct runtime fallback — A-Frame's xrweb system wraps this.
-          window.XR8.run({ canvas: scene && scene.canvas });
-        }
-        // else: xrweb auto-started on scene load; nothing more to do.
-      } catch (err) {
-        console.warn('[ar] 8th Wall session start failed:', err);
-        gatewayStatus.textContent = 'could not start ar · tap to retry';
-        gateway.classList.remove('hidden');
-      }
     });
 
     /* ── 8th Wall session start ─────────────────────────────────────
@@ -294,15 +290,12 @@
       }
     });
 
-    /* ── 8th Wall session error → return to the gateway ─────────────
-       8th Wall has no 'exit-vr' equivalent (the camera session does not
-       cleanly "end"). xrextras-runtime-error owns its own error UI; we
-       additionally re-surface the gateway on a scene-level camera/
-       runtime error so the user can retry. */
-    scene.addEventListener('xrerror', function () {
-      gatewayStatus.textContent = 'session ended · tap to re-enter';
-      gateway.classList.remove('hidden');
-    });
+    /* ── Session errors ────────────────────────────────────────────
+       8th Wall does not emit a scene-level 'xrerror' DOM event and has
+       no 'exit-vr' equivalent. Runtime/camera errors are owned by the
+       `xrextras-runtime-error` component (its own overlay UI); a CDN-
+       unreachable engine is caught by the <script onerror> above. No
+       additional session-error handler is needed here. */
 
     /* ── Surface detection ──────────────────────────────────────── */
     document.addEventListener('surface-detected', function () { setSurfaceDetected(); });
