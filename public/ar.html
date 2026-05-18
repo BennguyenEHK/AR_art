@@ -214,6 +214,41 @@
         }
       });
 
+      // Adaptive threshold patch — fixes detection failure on glossy/bright surfaces.
+      //
+      // Root cause: ARToolKit defaults to a fixed luminance threshold for binarisation
+      // (black ink vs white paper). A specular highlight on a glossy Hiro marker surface
+      // raises the luminance of dark regions toward the threshold, causing the detector
+      // to misclassify them as white background — the square border appears "broken" and
+      // no contour is found. High ambient light has the same effect globally.
+      //
+      // Fix: AR_LABELING_THRESH_MODE_AUTO_MEDIAN (1) — ARToolKit recomputes the threshold
+      // each detection cycle as the median pixel luminance of the full frame. This self-
+      // corrects for any exposure level because the median always falls between the dark
+      // and light populations regardless of how bright or dim the room is.
+      //
+      // Access path confirmed from AR.js 3.4.5 source:
+      //   scene.systems.arjs._arSession.arContext.arController
+      // arController is created asynchronously so we poll at 100 ms intervals.
+      (function patchAdaptiveThreshold() {
+        var attempts = 0;
+        var check = setInterval(function () {
+          attempts++;
+          var arSystem = scene.systems && scene.systems.arjs;
+          if (!arSystem || !arSystem._arSession) return;
+          var arCtx = arSystem._arSession.arContext;
+          if (!arCtx || !arCtx.arController) {
+            if (attempts > 100) { clearInterval(check); } // give up after ~10 s
+            return;
+          }
+          clearInterval(check);
+          var ctrl = arCtx.arController;
+          if (typeof ctrl.setThresholdMode === 'function') {
+            ctrl.setThresholdMode(1); // AR_LABELING_THRESH_MODE_AUTO_MEDIAN
+          }
+        }, 100);
+      })();
+
       var markerEverFound   = false;
       var lightingHintTimer = null;
 
