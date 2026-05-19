@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>A-Frame: Tap to Place Ground</title>
+
+  <!-- 8frame vendored locally (same file as RAG/external/scripts/8frame-1.5.0.min.js) -->
+  <script crossorigin="anonymous" src="vendor/8thwall/aframe-v1.5.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" crossorigin="anonymous" async="true" data-preload-chunks="slam"></script>
+</head>
+
+<body>
+
+<div class="over" style="position:fixed;top:20px;left:0;right:0;text-align:center;z-index:999;color:#fff;font-family:sans-serif;pointer-events:none">
+  <span id="promptText">Tap To Place Model</span>
+</div>
+
+<a-scene
+  landing-page
+  xrextras-loading
+  xrextras-runtime-error
+  renderer="colorManagement:true"
+  xrweb="
+    allowedDevices: any;
+    defaultEnvironmentFogIntensity: 0.5;
+    defaultEnvironmentFloorTexture: #groundTex;
+    defaultEnvironmentFloorColor: #FFF;
+    defaultEnvironmentSkyBottomColor: #B4C4CC;
+    defaultEnvironmentSkyTopColor: #5ac8fa;
+    defaultEnvironmentSkyGradientStrength: 0.5;">
+
+  <a-assets>
+    <img id="groundTex" src="rag-assets/sand.jpg">
+    <a-asset-item id="cactusModel" src="rag-assets/cactus.glb"></a-asset-item>
+  </a-assets>
+
+  <a-camera
+    id="camera"
+    position="0 8 8"
+    raycaster="objects: .cantap"
+    cursor="fuse: false; rayOrigin: mouse;">
+  </a-camera>
+
+  <a-entity
+    light="type: directional; intensity: 0.8; castShadow: true; shadowMapHeight:2048; shadowMapWidth:2048; shadowCameraTop: 40; shadowCameraBottom: -40; shadowCameraRight: 40; shadowCameraLeft: -40; target: #camera"
+    xrextras-attach="target: camera; offset: 8 15 4"
+    position="1 4.3 2.5"
+    shadow>
+  </a-entity>
+
+  <a-light type="ambient" intensity="0.5"></a-light>
+
+  <a-box
+    id="ground"
+    class="cantap"
+    scale="1000 2 1000"
+    position="0 -0.99 0"
+    material="shader: shadow; transparent: true; opacity: 0.4"
+    shadow>
+  </a-box>
+</a-scene>
+
+</body>
+
+</html>
