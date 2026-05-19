@@ -53,3 +53,6 @@ __pycache__/
 *.pyc
 
 certificates
+
+# local RAG reference material (8th Wall example repos — not part of the app)
+/RAG/

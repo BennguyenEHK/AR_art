@@ -92,7 +92,7 @@ export default function Home() {
         <div className="col-span-6 md:col-span-4">
           <p className="tiny-caps">stack</p>
           <p className="mt-2 font-mono text-[12px] leading-relaxed text-[color:var(--ink-soft)]">
-            next.js · a-frame · webxr · ably
+            next.js · a-frame · 8th wall · ably
           </p>
         </div>
         <div className="col-span-6 md:col-span-4 md:col-start-5">

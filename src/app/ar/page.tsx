@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-// AR is now served as a standalone A-Frame + AR.js page (public/ar.html).
+// AR is served as a standalone 8th Wall page (public/ar.html).
 // This shell redirects immediately so Next.js routing still works.
 export default function ARPage() {
   useEffect(() => {

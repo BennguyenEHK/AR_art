@@ -1,9 +1,9 @@
 /**
  * eighth-wall-placement.js — 8th Wall world-tracking placement adapter.
  *
- * Fallback AR engine for iOS / non-WebXR devices. Mirrors the CustomEvent
- * contract of webxr-placement.js exactly, so the HUD + multiplayer layer
- * (components.js, healing-sync.js, end-sequence.js) stays engine-agnostic.
+ * The AR placement engine. Dispatches CustomEvents on `document` so the HUD
+ * and multiplayer layer (components.js, healing-sync.js, end-sequence.js) stay
+ * decoupled from the AR engine.
  *
  * Boundary events dispatched on `document`:
  *   surface-detected — no detail — a placeable surface is being tracked

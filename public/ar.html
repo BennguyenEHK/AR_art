@@ -5,33 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>The Power of Many — AR</title>
   <link rel="stylesheet" href="ar.css" />
+
+  <!-- ──────────────────────────────────────────────────────────────
+       8th Wall engine. Load order is mandatory:
+         1. 8frame — 8th Wall's A-Frame fork. Defines the AFRAME global
+            and the `xrweb` world-tracking component. Vendored locally
+            (the old 8th Wall CDN is gone) and loaded as a blocking
+            <head> script so AFRAME exists before any component script
+            or <a-scene> in <body> is parsed.
+         2. xrextras / landing-page — loading screen, entry UI, runtime
+            error screen, and unsupported-browser detection.
+         3. engine-binary (xr.js) — the SLAM world-tracking WASM engine.
+            Loaded `async`; the `xrweb` component waits for it internally
+            via the `xrloaded` event.
+       ────────────────────────────────────────────────────────────── -->
+  <script src="vendor/8thwall/aframe-v1.5.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
 </head>
 <body>
 
-  <!-- Loading overlay -->
+  <!-- Loading overlay. 8th Wall's landing-page + xrextras-loading own the
+       real entry/loading UX; this is a brief branded dissolve handed off
+       on page load (see the inline HUD script). -->
   <div id="loading-overlay">
     <div id="loading-spinner"></div>
     <span>preparing the witness</span>
   </div>
 
-  <!-- Entry gateway: the single WebXR user-gesture threshold. WebXR requires a
-       user gesture inside THIS document to start an immersive session — it
-       cannot be inherited from the home page navigation. -->
-  <div id="enter-gateway" class="hidden">
-    <div class="gateway-grain"></div>
-    <div class="gateway-inner">
-      <span class="gateway-eyebrow">environment ar · place the witness</span>
-      <h1 class="gateway-title">Cross the<br /><em>threshold</em></h1>
-      <p class="gateway-desc">Find any flat surface — floor, table, ground. Tap once to place the witness. Everyone present heals together, in real time.</p>
-      <button id="enter-ar-btn" disabled>
-        <span class="gateway-btn-ring"></span>
-        <span class="gateway-btn-label">◉ enter ar</span>
-      </button>
-      <span class="gateway-status" id="gateway-status">checking device…</span>
-    </div>
-  </div>
-
-  <!-- AR unsupported overlay -->
+  <!-- AR unsupported / engine-load-failure overlay. ar-bootstrap.js reveals
+       this if the 8th Wall engine binary never initialises. -->
   <div id="ar-unsupported">
     <h2>device not supported</h2>
     <p id="ar-error-msg">AR is not available</p>
@@ -39,9 +43,9 @@
     <a href="/">← return home</a>
   </div>
 
-  <!-- DOM overlay root: the ONLY DOM subtree visible during the immersive AR
-       session. Declared BEFORE the scene mounts so the webxr overlayElement
-       selector resolves when the scene initialises. -->
+  <!-- HUD overlay: the always-on DOM layer above the AR canvas.
+       pointer-events are off so surface taps reach the scene; interactive
+       children (buttons, links) re-enable pointer-events themselves. -->
   <div id="ar-overlay">
     <div id="hud-top">
       <div id="user-count-pill" class="hud-pill">
@@ -79,98 +83,71 @@
     </div>
   </div>
 
-  <!-- Scene mount point. ar-bootstrap.js clones the engine-matched
-       <template> below into here once the engine scripts have loaded. -->
-  <div id="ar-stage"></div>
-
   <!-- ──────────────────────────────────────────────────────────────
-       Scene templates. <template> content is inert — A-Frame does not
-       parse it until ar-bootstrap.js clones it into #ar-stage. Exactly
-       one is used per page load, chosen by engine detection.
+       AR engine component scripts. These register custom A-Frame
+       components and MUST execute before the <a-scene> below is parsed:
+         components.js          — character-animator, tornado-effect,
+                                   barbed-wire, explosion-flash
+         eighth-wall-placement  — tap-to-place reticle component
+         healing-sync           — Ably multi-user healing sync
+         end-sequence           — the closing sequence (event-driven)
+       Ably loads first because healing-sync.js builds on it.
        ────────────────────────────────────────────────────────────── -->
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/eighth-wall-placement.js"></script>
+  <script src="js/healing-sync.js"></script>
+  <script src="js/end-sequence.js"></script>
 
-  <!-- WebXR scene (primary: Android Chrome / native ARCore) -->
-  <template id="tmpl-scene-webxr">
-    <a-scene
-      id="ar-scene"
-      webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor; overlayElement: #ar-overlay"
-      renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false"
-      background="color: #000000"
-      vr-mode-ui="enabled: false"
-    >
-      <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
-      <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
+  <!-- 8th Wall world-tracking scene. `landing-page` owns the entry UI and
+       the camera-permission user gesture; `xrextras-loading` and
+       `xrextras-runtime-error` own the loading and error screens. -->
+  <a-scene
+    id="ar-scene"
+    xrweb="allowedDevices: any"
+    landing-page
+    xrextras-loading
+    xrextras-runtime-error
+    renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false; colorManagement: true"
+    vr-mode-ui="enabled: false"
+  >
+    <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
-      <!-- Placement reticle: webxr-placement manages hit-test + tap-to-place -->
-      <a-entity id="placement-reticle" webxr-placement></a-entity>
+    <!-- invisible ground plane: the raycast target for tap-to-place (.cantap) -->
+    <a-entity id="ar-ground" class="cantap"
+              geometry="primitive: plane; width: 1000; height: 1000"
+              rotation="-90 0 0"
+              material="visible: false"></a-entity>
 
-      <!-- Scene root: invisible until object-placed positions + reveals it -->
-      <a-entity id="scene-root" visible="false">
-        <a-entity
-          id="character-root"
-          character-animator="healingPercent: 0; mode: a"
-          position="0 -0.18 0"
-        ></a-entity>
-        <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
-        <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
-        <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
-      </a-entity>
+    <a-entity id="placement-reticle" eighth-wall-placement></a-entity>
 
-      <a-entity camera></a-entity>
-    </a-scene>
-  </template>
+    <!-- Scene root: invisible until object-placed positions + reveals it -->
+    <a-entity id="scene-root" visible="false">
+      <a-entity id="character-root" character-animator="healingPercent: 0; mode: a" position="0 -0.18 0"></a-entity>
+      <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+    </a-entity>
 
-  <!-- 8th Wall scene (fallback: iOS Safari / any non-WebXR device) -->
-  <template id="tmpl-scene-eighthwall">
-    <a-scene
-      id="ar-scene"
-      xrweb="allowedDevices: any"
-      landing-page
-      xrextras-loading
-      xrextras-runtime-error
-      renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false; colorManagement: true"
-      vr-mode-ui="enabled: false"
-    >
-      <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
-      <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
+    <!-- camera Y MUST be non-zero — 8th Wall uses it to set content scale
+         and the ground reference; position matches the official 8th Wall
+         world-effects example. -->
+    <a-camera position="0 8 8"
+              cursor="rayOrigin: mouse; fuse: false"
+              raycaster="objects: .cantap"></a-camera>
+  </a-scene>
 
-      <!-- invisible ground plane: the raycast target for placement (.cantap) -->
-      <a-entity id="ar-ground" class="cantap"
-                geometry="primitive: plane; width: 1000; height: 1000"
-                rotation="-90 0 0"
-                material="visible: false"></a-entity>
-
-      <a-entity id="placement-reticle" eighth-wall-placement></a-entity>
-
-      <!-- Scene root: invisible until object-placed positions + reveals it -->
-      <a-entity id="scene-root" visible="false">
-        <a-entity id="character-root" character-animator="healingPercent: 0; mode: a" position="0 -0.18 0"></a-entity>
-        <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
-        <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
-        <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
-      </a-entity>
-
-      <!-- camera Y MUST be non-zero (8th Wall: sets content scale + ground ref);
-           position matches the official 8thwall world-effects example -->
-      <a-camera position="0 8 8"
-                cursor="rayOrigin: mouse; fuse: false"
-                raycaster="objects: .cantap"></a-camera>
-    </a-scene>
-  </template>
-
-  <!-- Scripts: defer Ably so it doesn't block engine bootstrap. The engine
-       script chain (A-Frame build, components, placement adapter, sync) is
-       loaded dynamically by ar-bootstrap.js once the engine is chosen. -->
-  <script src="https://cdn.ably.com/lib/ably.min-2.js" defer></script>
+  <!-- Session bridge: 8th Wall 'realityready' → 'ar-session-started'. -->
   <script src="js/ar-bootstrap.js"></script>
 
   <script>
   (function () {
     'use strict';
 
-    /* Engine-agnostic HUD logic. Engine detection, the Enter-AR button, and
-       session start all live in ar-bootstrap.js. This script talks to the
-       AR layer only through CustomEvents on `document`. */
+    /* Engine-agnostic HUD logic. It talks to the AR layer only through
+       CustomEvents on `document` — ar-bootstrap.js bridges 8th Wall's
+       'realityready' into 'ar-session-started'. */
 
     var overlay        = document.getElementById('loading-overlay');
     var statusPill     = document.getElementById('status-pill');
@@ -246,22 +223,22 @@
       if (character) character.setAttribute('character-animator', 'healingPercent', percent);
     });
 
-    /* ── Loading overlay clearing ───────────────────────────────── */
-    /* ar-bootstrap.js owns engine detection and gateway visibility; this
-       only fades the loading overlay away once the scene is ready. */
+    /* ── Loading overlay handoff ────────────────────────────────── */
+    /* 8th Wall's landing-page + xrextras-loading own the entry and loading
+       UX. Hand off immediately so this overlay never covers the
+       landing-page tap target — `.fade-out` drops pointer-events at once. */
     var overlayCleared = false;
     function clearOverlay() {
-      if (overlayCleared) return;
+      if (overlayCleared || !overlay) return;
       overlayCleared = true;
       overlay.classList.add('fade-out');
       setTimeout(function () {
         overlay.classList.add('hidden');
       }, 900);
     }
-    document.addEventListener('character-ready', clearOverlay);
-    setTimeout(clearOverlay, 8000);
+    clearOverlay();
 
-    /* ── AR session start (unified across both engines) ─────────── */
+    /* ── AR session start (8th Wall 'realityready') ─────────────── */
     document.addEventListener('ar-session-started', function () {
       setSearching();
       if (!healingSyncStarted && window.HealingSync) {
@@ -271,8 +248,7 @@
           if (ps && ps.placed) {
             var reticle = document.getElementById('placement-reticle');
             var comp = reticle && reticle.components &&
-              (reticle.components['webxr-placement'] ||
-               reticle.components['eighth-wall-placement']);
+              reticle.components['eighth-wall-placement'];
             if (comp && !comp.placed) { comp.autoPlace(); }
           }
         }).catch(console.error);
@@ -286,8 +262,6 @@
     /* ── Object placed (local tap OR remote auto-place) ─────────── */
     document.addEventListener('object-placed', function (e) {
       var pos = e.detail;
-      /* Look up #scene-root lazily — the scene is injected by the
-         bootstrap after this script parses. */
       var sceneRoot = document.getElementById('scene-root');
       if (!sceneRoot) return;
       sceneRoot.object3D.position.set(pos.x, pos.y, pos.z);
@@ -299,12 +273,10 @@
     });
 
     /* ── Remote placement broadcast → auto-place this user ──────── */
-    /* Engine-agnostic: drives whichever placement adapter is mounted. */
     document.addEventListener('placement-broadcast', function () {
       var reticle = document.getElementById('placement-reticle');
       var comp = reticle && reticle.components &&
-        (reticle.components['webxr-placement'] ||
-         reticle.components['eighth-wall-placement']);
+        reticle.components['eighth-wall-placement'];
       if (comp && !comp.placed) { comp.autoPlace(); }
     });
 
