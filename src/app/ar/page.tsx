@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 export default function ARPage() {
   useEffect(() => {
-    window.location.replace("/ar-rag.html");
+    window.location.replace("/ar.html");
   }, []);
 
   // Black screen while the redirect fires — matches AR.js page background
