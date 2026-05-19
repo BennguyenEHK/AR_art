@@ -53,10 +53,10 @@
       return;
     }
     log('scene found');
+    fadeLoadingOverlay();
 
     scene.addEventListener('realityready', function () {
       log('realityready');
-      fadeLoadingOverlay();
       announceSession();
     });
 

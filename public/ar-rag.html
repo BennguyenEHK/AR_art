@@ -9,6 +9,48 @@
 
   <!-- 8frame vendored locally (same file as RAG/external/scripts/8frame-1.5.0.min.js) -->
   <script crossorigin="anonymous" src="vendor/8thwall/aframe-v1.5.0.min.js"></script>
+
+  <script>
+    AFRAME.registerComponent('tap-place', {
+      init: function () {
+        var sceneEl = this.el.sceneEl;
+        var ground = document.getElementById('ground');
+        var prompt = document.getElementById('promptText');
+
+        ground.addEventListener('click', function (event) {
+          if (!event.detail || !event.detail.intersection) {
+            return;
+          }
+
+          prompt.style.display = 'none';
+
+          var touchPoint = event.detail.intersection.point;
+          var randomScale = Math.floor(Math.random() * (10 - 6) + 6);
+
+          var newElement = document.createElement('a-entity');
+          newElement.setAttribute('position', touchPoint);
+          newElement.setAttribute('rotation', '0 ' + (Math.random() * 360) + ' 0');
+          newElement.setAttribute('visible', 'false');
+          newElement.setAttribute('scale', '0.0001 0.0001 0.0001');
+          newElement.setAttribute('shadow', 'receive: false');
+          newElement.setAttribute('gltf-model', '#cactusModel');
+
+          sceneEl.appendChild(newElement);
+
+          newElement.addEventListener('model-loaded', function () {
+            newElement.setAttribute('visible', 'true');
+            newElement.setAttribute('animation', {
+              property: 'scale',
+              to: randomScale + ' ' + randomScale + ' ' + randomScale,
+              easing: 'easeOutElastic',
+              dur: 800,
+            });
+          });
+        });
+      },
+    });
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" crossorigin="anonymous" async="true" data-preload-chunks="slam"></script>
@@ -21,6 +63,7 @@
 </div>
 
 <a-scene
+  tap-place
   landing-page
   xrextras-loading
   xrextras-runtime-error
