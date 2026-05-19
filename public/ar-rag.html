@@ -12,43 +12,45 @@
 
   <script>
     AFRAME.registerComponent('tap-place', {
-      init: function () {
-        var sceneEl = this.el.sceneEl;
-        var ground = document.getElementById('ground');
-        var prompt = document.getElementById('promptText');
+      schema: {
+        min: {default: 6},
+        max: {default: 10},
+      },
+      init() {
+        const ground = document.getElementById('ground')
+        this.prompt = document.getElementById('promptText')
 
-        ground.addEventListener('click', function (event) {
-          if (!event.detail || !event.detail.intersection) {
-            return;
-          }
+        ground.addEventListener('click', (event) => {
+          this.prompt.style.display = 'none'
 
-          prompt.style.display = 'none';
+          const newElement = document.createElement('a-entity')
 
-          var touchPoint = event.detail.intersection.point;
-          var randomScale = Math.floor(Math.random() * (10 - 6) + 6);
+          const touchPoint = event.detail.intersection.point
+          newElement.setAttribute('position', touchPoint)
 
-          var newElement = document.createElement('a-entity');
-          newElement.setAttribute('position', touchPoint);
-          newElement.setAttribute('rotation', '0 ' + (Math.random() * 360) + ' 0');
-          newElement.setAttribute('visible', 'false');
-          newElement.setAttribute('scale', '0.0001 0.0001 0.0001');
-          newElement.setAttribute('shadow', 'receive: false');
-          newElement.setAttribute('gltf-model', '#cactusModel');
+          const randomYRotation = Math.random() * 360
+          newElement.setAttribute('rotation', `0 ${randomYRotation} 0`)
 
-          sceneEl.appendChild(newElement);
+          const randomScale = Math.floor(Math.random() * (Math.floor(this.data.max) - Math.ceil(this.data.min)) + Math.ceil(this.data.min))
 
-          newElement.addEventListener('model-loaded', function () {
-            newElement.setAttribute('visible', 'true');
+          newElement.setAttribute('visible', 'false')
+          newElement.setAttribute('scale', '0.0001 0.0001 0.0001')
+          newElement.setAttribute('shadow', {receive: false})
+          newElement.setAttribute('gltf-model', '#cactusModel')
+          this.el.sceneEl.appendChild(newElement)
+
+          newElement.addEventListener('model-loaded', () => {
+            newElement.setAttribute('visible', 'true')
             newElement.setAttribute('animation', {
               property: 'scale',
-              to: randomScale + ' ' + randomScale + ' ' + randomScale,
+              to: `${randomScale} ${randomScale} ${randomScale}`,
               easing: 'easeOutElastic',
               dur: 800,
-            });
-          });
-        });
+            })
+          })
+        })
       },
-    });
+    })
   </script>
 
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
