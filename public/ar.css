@@ -432,6 +432,18 @@ a-scene > div:not(.a-canvas) {
   text-decoration: none;
   border-bottom: 1px solid rgba(212,168,67,0.3);
 }
+/* Diagnostic trail — populated by ar-bootstrap.js so an on-device failure
+   can be reported without a console. Empty (and invisible) on success. */
+#ar-diag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  line-height: 1.7;
+  color: rgba(240, 228, 200, 0.3);
+  max-width: 320px;
+  word-break: break-word;
+}
+#ar-diag:empty { display: none; }
 
 /* ── Surface-detected status pill state ──────────────────────────── */
 #status-pill.surface-detected {
