@@ -146,7 +146,7 @@
     // ends with the placement adapter so components register before the
     // scene template is cloned in.
     loadSequential([
-      'vendor/8thwall/aframe-v1.5.0.min.js',
+      'vendor/8thwall/aframe-v1.5.0.min.js', // 8th Wall's A-Frame fork ("8frame") — registers the xrweb component; this is NOT stock A-Frame
       'https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js',
       'https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js',
       'js/components.js',
@@ -157,21 +157,12 @@
       var scene = injectScene('tmpl-scene-eighthwall');
       if (!scene) return;
 
-      enterARBtn.removeAttribute('disabled');
-      if (gatewayStatus) gatewayStatus.textContent = 'device ready · tap to enter';
-      if (gateway) gateway.classList.remove('hidden');
-
-      // 8th Wall's landing-page component owns the iOS user-gesture
-      // getUserMedia start. Tapping Enter-AR just hands off to it.
-      enterARBtn.addEventListener('click', function () {
-        gateway.classList.add('hidden');
-        var landing = document.getElementById('landing-page')
-          || document.querySelector('.landing-page, #landingPage');
-        if (landing) {
-          landing.classList.remove('hidden');
-          landing.style.display = '';
-        }
-      });
+      // 8th Wall's `landing-page` component renders its own full-screen entry
+      // UI and owns the iOS getUserMedia user gesture — it activates itself as
+      // soon as the scene parses. Our #enter-gateway is the WebXR gesture gate
+      // only; on the 8th Wall path it stays hidden so the two entry flows do
+      // not collide. The loading overlay fades away on 'character-ready'.
+      if (gateway) gateway.classList.add('hidden');
 
       // 8th Wall signals the tracking session is live with 'realityready'.
       scene.addEventListener('realityready', announceSession);
