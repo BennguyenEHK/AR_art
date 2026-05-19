@@ -15,12 +15,13 @@ const nextConfig: NextConfig = {
       // SLAM tracker is WebAssembly and it spawns blob-URL web workers.
       "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.ably.com",
       "connect-src 'self' blob: https://cdn.jsdelivr.net https://cdn.ably.com https://*.ably.io https://*.ably-realtime.com wss://*.ably.io wss://*.ably-realtime.com",
-      "style-src 'self' 'unsafe-inline'",
-      // jsDelivr serves the landing-page / xrextras splash images + fonts.
+      // fonts.googleapis.com serves the @import CSS; fonts.gstatic.com serves woff2 files.
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // jsDelivr serves xrextras/landing-page splash assets.
       "img-src 'self' data: blob: https://cdn.jsdelivr.net",
       "media-src 'self' data: blob:",
       "worker-src 'self' blob:",
-      "font-src 'self' data: https://cdn.jsdelivr.net",
+      "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
     ].join("; ");
 
     return [

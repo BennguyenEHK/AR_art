@@ -109,13 +109,13 @@
 
   <!-- 8th Wall world-tracking scene — INERT until ar-bootstrap.js clones it
        into #ar-stage after `xrloaded` (so the `xrweb` component is
-       registered). `landing-page` owns the entry UI and camera gesture;
+       registered). `landing-pages` owns the entry UI and camera gesture;
        `xrextras-loading` / `xrextras-runtime-error` own loading + errors. -->
   <template id="tmpl-ar-scene">
     <a-scene
       id="ar-scene"
       xrweb="allowedDevices: any"
-      landing-page
+      landing-pages
       xrextras-loading
       xrextras-runtime-error
       renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false; colorManagement: true"

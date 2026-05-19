@@ -95,6 +95,7 @@
   function onEngineReady() {
     if (engineTimer) { clearTimeout(engineTimer); engineTimer = null; }
     log('engine ready (XR8)');
+
     // 8frame registers `xrweb` only if XR8 already existed at its load time —
     // which it does not, because xr.js is async. xrextras re-registers it on
     // `xrloaded`, but listener order across libraries is not contractual, so
@@ -113,6 +114,18 @@
     } catch (err) {
       log('ERROR registering xrweb: ' + (err && err.message));
     }
+
+    // Diagnostic: record which 8th Wall A-Frame components are registered so
+    // on-device failures can be reported without a console.
+    var knownComponents = ['xrweb', 'landing-pages', 'xrextras-loading', 'xrextras-runtime-error'];
+    var missing = [];
+    if (window.AFRAME && window.AFRAME.components) {
+      knownComponents.forEach(function (c) {
+        if (!window.AFRAME.components[c]) missing.push(c);
+      });
+    }
+    if (missing.length) log('missing components: ' + missing.join(', '));
+
     mountScene();
   }
 

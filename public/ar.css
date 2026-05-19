@@ -373,9 +373,11 @@ body > video {
   border-color: rgba(212, 168, 67, 0.65);
 }
 
-/* ── Hide A-Frame VR/AR entry buttons and all UI overlays ── */
-/* A-Frame 1.6.0 uses .a-enter-vr as the container div and .a-enter-vr-button
-   for the actual button; AR.js may re-inject these even when vr-mode-ui is disabled */
+/* ── Hide A-Frame built-in VR/AR entry buttons ── */
+/* vr-mode-ui="enabled: false" suppresses most of these; this is a belt-and-
+   braces guard. Do NOT add a broad `a-scene > div` selector here — 8th Wall's
+   landing-pages and xrextras-loading components inject their overlays as
+   children of <a-scene>, and hiding them breaks the entire entry flow. */
 .a-enter-vr,
 .a-enter-vr-button,
 .a-enter-ar,
@@ -385,8 +387,7 @@ body > video {
 .a-loader-title,
 .a-orientation-modal,
 .a-dialog,
-[data-aframe-info],
-a-scene > div:not(.a-canvas) {
+[data-aframe-info] {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
