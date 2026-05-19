@@ -91,25 +91,44 @@
       var scene = injectScene('tmpl-scene-webxr');
       if (!scene) return;
 
-      // Enter-AR is the single required user gesture — WebXR cannot start an
-      // immersive session without a gesture inside this document.
-      enterARBtn.removeAttribute('disabled');
-      if (gatewayStatus) gatewayStatus.textContent = 'device ready · tap to enter';
       // Reveal the gateway now the engine is ready (it ships hidden; the
       // loading overlay fades away on top of it via the inline HUD script).
       if (gateway) gateway.classList.remove('hidden');
 
+      // The Enter-AR button must NOT be tappable until A-Frame has built the
+      // scene's renderer: enterAR() -> enterVR() reads `renderer.xr` with no
+      // guard and throws synchronously if called first. injectScene() returns
+      // the <a-scene> the same tick it is inserted — long before init runs —
+      // so the button (disabled in markup) is armed only once the scene fires
+      // 'loaded', or immediately if it has already loaded.
+      function armEnterButton() {
+        enterARBtn.removeAttribute('disabled');
+        if (gatewayStatus) gatewayStatus.textContent = 'device ready · tap to enter';
+      }
+      if (scene.hasLoaded) {
+        armEnterButton();
+      } else {
+        if (gatewayStatus) gatewayStatus.textContent = 'preparing the scene…';
+        scene.addEventListener('loaded', armEnterButton);
+      }
+
       enterARBtn.addEventListener('click', function () {
         gateway.classList.add('hidden');
-        var p = scene.enterAR();
-        if (p && typeof p.catch === 'function') {
-          p.catch(function (err) {
-            console.warn('[ar-bootstrap] enterAR failed:', err);
-            if (gatewayStatus) {
-              gatewayStatus.textContent = 'could not start ar · tap to retry';
-            }
-            gateway.classList.remove('hidden');
-          });
+        // enterAR() can fail two ways: a rejected promise, or a synchronous
+        // throw (A-Frame reads renderer.xr unguarded). Handle BOTH so a
+        // failure always returns the user to the gateway, never a dead screen.
+        function onEnterFailed(err) {
+          console.warn('[ar-bootstrap] enterAR failed:', err);
+          if (gatewayStatus) {
+            gatewayStatus.textContent = 'could not start ar · tap to retry';
+          }
+          gateway.classList.remove('hidden');
+        }
+        try {
+          var p = scene.enterAR();
+          if (p && typeof p.catch === 'function') { p.catch(onEnterFailed); }
+        } catch (err) {
+          onEnterFailed(err);
         }
       });
 
