@@ -43,6 +43,7 @@ html, body {
   letter-spacing: 0.3em;
   text-transform: uppercase;
   transition: opacity 0.8s ease;
+  pointer-events: none;
 }
 
 #loading-overlay.fade-out {
@@ -62,61 +63,11 @@ html, body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── A-Frame scene ───────────────────────────────────────────────── */
-/* `embedded` is set on <a-scene>. AR.js no longer fullscreens itself, so we must
-   manually pin the canvas to the viewport. Without this the canvas collapses and
-   the camera video is invisible behind the body background. */
+/* 8th Wall manages its own scene positioning — only keep the background
+   transparent. Do NOT set overflow, position, z-index, width, or height
+   here; those break 8th Wall's landing-page overlay injection. */
 #ar-scene {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  z-index: 1 !important;
   background: transparent !important;
-  overflow: hidden !important;
-}
-
-/* AR.js writes inline width/height/margin on the <video> and <canvas> at
-   runtime, sizing them with different portrait-mode formulas. Overriding only
-   width/height leaves a stale `margin-left` that shifts the canvas off the
-   video — marker and model drift apart, and the uncovered edge goes black.
-   Resetting `margin` locks both layers to one full-viewport rectangle. */
-#ar-scene canvas,
-#ar-scene .a-canvas {
-  display: block !important;
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  margin: 0 !important;
-  z-index: 1 !important;
-  background: transparent !important;
-  object-fit: cover !important;
-}
-
-/* A-Frame wraps its canvas in an internal div; force it to fill the scene element */
-#ar-scene > div {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* AR.js injects a <video> into <body> for the webcam feed.
-   Pin it to the viewport at z-index 0 (behind the canvas at z=1) so the
-   transparent WebGL pixels reveal the live camera image. `margin: 0`
-   neutralises the centring margin AR.js writes inline — without it the
-   video sits in a different rectangle than the canvas. */
-#arjs-video,
-video[id^="arjs"],
-body > video {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  margin: 0 !important;
-  z-index: 0 !important;
-  object-fit: cover !important;
 }
 
 /* ── HUD overlay root — the always-on DOM layer above the AR canvas.
