@@ -36,7 +36,9 @@
       members.sort((a, b) => a.clientId.localeCompare(b.clientId));
       const wasLeader = _isLeader;
       _isLeader = members.length > 0 && members[0].clientId === _clientId;
-      _state.userCount = members.length;
+      // Healing rate counts only users who have placed their witness
+      // (presence.data.placed === true). Lurkers on the page do not contribute.
+      _state.userCount = members.filter(m => m.data && m.data.placed === true).length;
       if (_isLeader && !wasLeader) startLeaderTick();
       if (!_isLeader && wasLeader) stopLeaderTick();
     } catch {}
@@ -93,10 +95,14 @@
   }
 
   function runLocalFallback() {
-    _state.userCount = 1;
+    // userCount starts at 0; notifyPlaced() bumps it to 1 when the user
+    // actually places the witness — same gating rule as the Ably path.
+    _state.userCount = 0;
     const interval = setInterval(() => {
       if (_state.percent >= 100) { clearInterval(interval); if (!_healingComplete) triggerComplete(); return; }
-      _state.percent = Math.min(100, _state.percent + PER_USER_RATE);
+      if (_state.userCount > 0) {
+        _state.percent = Math.min(100, _state.percent + PER_USER_RATE * _state.userCount);
+      }
       emitUpdate();
     }, 1000);
   }
@@ -142,7 +148,7 @@
         }));
       });
 
-      await _channel.presence.enter({ joinedAt: Date.now() });
+      await _channel.presence.enter({ joinedAt: Date.now(), placed: false });
       _channel.presence.subscribe(() => checkLeadership());
       await checkLeadership();
 
@@ -167,6 +173,13 @@
       _placementState = { placed: true, t: Date.now() };
       if (_channel) {
         _channel.publish('placement-state', { placed: true, t: Date.now() });
+        // Mark this client as placed in presence so the leader counts it
+        // toward the healing rate.
+        _channel.presence.update({ joinedAt: Date.now(), placed: true });
+      } else {
+        // Local fallback (Ably disabled): this single user now contributes.
+        _state.userCount = 1;
+        emitUpdate();
       }
     },
 
