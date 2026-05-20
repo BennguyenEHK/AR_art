@@ -3,7 +3,9 @@
 
   let _realtime = null;
   let _channel = null;
-  let _state = { percent: 0, userCount: 0, phase: 'healing' };
+  // userCount   = total presence members on /ar (drives SOULS bar)
+  // placedCount = members with data.placed === true (drives healing rate)
+  let _state = { percent: 0, userCount: 0, placedCount: 0, phase: 'healing' };
   let _clientId = null;
   let _isLeader = false;
   let _leaderInterval = null;
@@ -36,9 +38,11 @@
       members.sort((a, b) => a.clientId.localeCompare(b.clientId));
       const wasLeader = _isLeader;
       _isLeader = members.length > 0 && members[0].clientId === _clientId;
+      // SOULS bar counts everyone present on /ar (lurkers included).
+      _state.userCount = members.length;
       // Healing rate counts only users who have placed their witness
       // (presence.data.placed === true). Lurkers on the page do not contribute.
-      _state.userCount = members.filter(m => m.data && m.data.placed === true).length;
+      _state.placedCount = members.filter(m => m.data && m.data.placed === true).length;
       if (_isLeader && !wasLeader) startLeaderTick();
       if (!_isLeader && wasLeader) stopLeaderTick();
     } catch {}
@@ -52,8 +56,9 @@
       const now = Date.now();
       const dt = (now - _lastTick) / 1000;
       _lastTick = now;
-      const effective = Math.min(_state.userCount, MAX_USERS);
-      // (b) Decay when nobody present; increase when users are here
+      // Rate is driven by placed users only — lurkers don't progress the bar.
+      const effective = Math.min(_state.placedCount, MAX_USERS);
+      // (b) Decay when nobody placed; increase when placed users are here
       if (effective <= 0) {
         _state.percent = Math.max(0, _state.percent - PER_USER_RATE * dt);
       } else {
@@ -62,6 +67,7 @@
       _channel.publish('healing-state', {
         percent: _state.percent,
         userCount: _state.userCount,
+        placedCount: _state.placedCount,
         t: Date.now()
       });
       emitUpdate();
@@ -75,7 +81,11 @@
 
   function emitUpdate() {
     document.dispatchEvent(new CustomEvent('healing-update', {
-      detail: { percent: _state.percent, userCount: _state.userCount }
+      detail: {
+        percent: _state.percent,
+        userCount: _state.userCount,
+        placedCount: _state.placedCount
+      }
     }));
   }
 
@@ -95,13 +105,14 @@
   }
 
   function runLocalFallback() {
-    // userCount starts at 0; notifyPlaced() bumps it to 1 when the user
-    // actually places the witness — same gating rule as the Ably path.
-    _state.userCount = 0;
+    // Local-only mode: the single user IS on /ar, so SOULS shows 1 immediately.
+    // placedCount stays at 0 until notifyPlaced() flips it — that gates the rate.
+    _state.userCount = 1;
+    _state.placedCount = 0;
     const interval = setInterval(() => {
       if (_state.percent >= 100) { clearInterval(interval); if (!_healingComplete) triggerComplete(); return; }
-      if (_state.userCount > 0) {
-        _state.percent = Math.min(100, _state.percent + PER_USER_RATE * _state.userCount);
+      if (_state.placedCount > 0) {
+        _state.percent = Math.min(100, _state.percent + PER_USER_RATE * _state.placedCount);
       }
       emitUpdate();
     }, 1000);
@@ -119,7 +130,7 @@
       // Sync healing state from leader (or from rewind on first join)
       _channel.subscribe('healing-state', (msg) => {
         if (!msg.data) return;
-        const { percent, userCount, t } = msg.data;
+        const { percent, userCount, placedCount, t } = msg.data;
         const staleSec = t ? (Date.now() - t) / 1000 : 0;
 
         if (staleSec > 3) {
@@ -129,6 +140,7 @@
           // Fresh: take max to handle out-of-order delivery
           if (percent > _state.percent) _state.percent = percent;
           if (userCount !== undefined) _state.userCount = userCount;
+          if (placedCount !== undefined) _state.placedCount = placedCount;
         }
 
         emitUpdate();
@@ -153,13 +165,15 @@
       await checkLeadership();
 
       // (b) Abandonment marker: last user leaving publishes userCount=0 + timestamp
-      // so the next visitor can compute retroactive decay via rewind
+      // so the next visitor can compute retroactive decay via rewind.
+      // userCount<=1 means this client is the last presence member on /ar.
       window.addEventListener('beforeunload', () => {
         if (_isLeader && _state.userCount <= 1 && _state.phase === 'healing') {
           try {
             _channel.publish('healing-state', {
               percent: _state.percent,
               userCount: 0,
+              placedCount: 0,
               t: Date.now()
             });
           } catch(_e) {}
@@ -177,8 +191,9 @@
         // toward the healing rate.
         _channel.presence.update({ joinedAt: Date.now(), placed: true });
       } else {
-        // Local fallback (Ably disabled): this single user now contributes.
-        _state.userCount = 1;
+        // Local fallback (Ably disabled): this single user now contributes to the rate.
+        // userCount was already 1 (user is on /ar); placedCount flips to 1 here.
+        _state.placedCount = 1;
         emitUpdate();
       }
     },
@@ -191,7 +206,7 @@
     reset() {
       if (_channel) {
         _channel.publish('healing-reset', { t: Date.now() });
-        _channel.publish('healing-state', { percent: 0, userCount: _state.userCount, t: Date.now() });
+        _channel.publish('healing-state', { percent: 0, userCount: _state.userCount, placedCount: _state.placedCount, t: Date.now() });
       }
       setTimeout(() => window.location.reload(), 400);
     },
