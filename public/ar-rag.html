@@ -274,26 +274,19 @@
       setPlaced();
     });
 
-    /* ── 8th Wall lifecycle: wait for the scene, hook engine events ──
-       CRITICAL — DO NOT call HealingSync.init() or any Ably setup
-       SYNCHRONOUSLY during page load. `new Ably.Realtime(...)` has
-       constructor side effects (global error handlers, internal DOM
-       batching) that interleave with A-Frame's component mount queue
-       during the exact window when the `landing-page` component is
-       trying to inject its "TAP TO ENTER AR" splash. On Android Chrome
-       this starves the landing-page init, so the splash never appears,
-       getUserMedia never fires, and the camera is never requested.
-       Always defer HealingSync.init() until after `realityready` —
-       by then 8th Wall has finished mounting + the splash has been
-       tapped + camera is up, so DOM contention is harmless.
-
-       The iOS "preparing…" race (where a cached engine fires
-       realityready before this listener attaches) is handled by a
-       timeout fallback that ONLY updates the HUD pill text — it does
-       NOT re-trigger HealingSync.init or anything engine-related.
-       ──────────────────────────────────────────────────────────── */
-    function bootHealingSyncOnce() {
-      if (healingSyncStarted || !window.HealingSync) { return; }
+    /* ── Bootstrap (no DOMContentLoaded gate) ──────────────────────
+       This script lives at the end of <body>, AFTER <a-scene>, so the
+       scene element already exists. We must NOT wait for DOMContentLoaded
+       because on iOS Safari with a cached 8th Wall engine, `realityready`
+       can fire BEFORE DOMContentLoaded — the listener would attach too
+       late and the event would be lost, leaving the HUD stuck on "preparing…".
+       Fix: run setup synchronously now + flip status to "scanning"
+       immediately (the HUD is hidden behind the 8th Wall landing-page
+       overlay anyway until the user taps to enter AR).
+       ────────────────────────────────────────────────────────────── */
+    function bootHealingSync() {
+      if (healingSyncStarted) { return; }
+      if (!window.HealingSync) { return; }
       healingSyncStarted = true;
       window.HealingSync.init().then(function () {
         var ps = window.HealingSync.getPlacementState && window.HealingSync.getPlacementState();
@@ -306,43 +299,32 @@
       }).catch(function (err) { console.error('[ar-rag] HealingSync.init failed', err); });
     }
 
-    function wireScene() {
-      var scene = document.getElementById('ar-scene');
-      if (!scene) { return; }
+    var scene = document.getElementById('ar-scene');
+    if (scene) {
+      // Default the HUD to "scanning" right away. realityready may have
+      // already fired on iOS with a cached engine; if so, listening for it
+      // again would never resolve and the pill would stay on "preparing…".
+      setSearching();
 
+      // Still listen for realityready as a no-op refresh (will not fire
+      // on cached iOS, but does on cold Android boot). xrtrackingstatus
+      // fires repeatedly and is the authoritative source after this point.
       scene.addEventListener('realityready', function () {
         setSearching();
-        bootHealingSyncOnce();
+        bootHealingSync();
       });
 
-      // xrtrackingstatus fires repeatedly — it's also our safety net for
-      // the iOS cached-engine race where `realityready` may have fired
-      // before this listener attached. If realityready was missed,
-      // the first xrtrackingstatus tick will boot HealingSync.
       scene.addEventListener('xrtrackingstatus', function (evt) {
         var status = evt && evt.detail && evt.detail.status;
-        bootHealingSyncOnce();
         if (hasPlaced) { return; }
         if (status === 'NORMAL') { setSurfaceDetected(); }
         else                     { setSearching(); }
       });
 
-      // iOS-cached-engine race fallback: if neither realityready nor
-      // xrtrackingstatus has updated the HUD pill within 4 s, update
-      // it so it doesn't stay stuck on "preparing…". This deliberately
-      // does NOT touch HealingSync.init() — that's gated by the engine
-      // events so we don't reintroduce the Android landing-page race.
-      setTimeout(function () {
-        if (promptText && promptText.textContent === 'preparing…') {
-          setSearching();
-        }
-      }, 4000);
-    }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', wireScene);
-    } else {
-      wireScene();
+      // Kick Ably immediately — it's independent of the AR engine and
+      // does not need to wait for realityready. This guarantees the
+      // Ably presence/rewind path runs even if realityready was missed.
+      bootHealingSync();
     }
   })();
   </script>
