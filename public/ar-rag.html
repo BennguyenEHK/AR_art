@@ -1,53 +1,56 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <title>A-Frame: Tap to Place Ground</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>The Power of Many — AR</title>
+  <link rel="stylesheet" href="ar-rag.css" />
 
   <!-- 8frame vendored locally (same file as RAG/external/scripts/8frame-1.5.0.min.js) -->
   <script crossorigin="anonymous" src="vendor/8thwall/aframe-v1.5.0.min.js"></script>
 
+  <!-- ──────────────────────────────────────────────────────────────
+       tap-place — modified from the cactus RAG demo:
+         · single-spawn lock (the witness is placed exactly once, ever)
+         · the spawn target is a static #scene-root that was authored
+           inside <a-scene>, NOT a per-tap createElement, so the GLBs
+           and tornado/wire/explosion are pre-warmed before the tap
+         · listens for `placement-broadcast` from healing-sync.js so
+           a remote tap auto-places this client too (shared environment)
+       ────────────────────────────────────────────────────────────── -->
   <script>
     AFRAME.registerComponent('tap-place', {
-      schema: {
-        min: {default: 6},
-        max: {default: 10},
-      },
       init() {
+        this.placed = false
         const ground = document.getElementById('ground')
-        this.prompt = document.getElementById('promptText')
+        const sceneRoot = document.getElementById('scene-root')
+        const prompt = document.getElementById('promptText')
+
+        const reveal = (point, autoPlaced) => {
+          if (this.placed) { return }
+          this.placed = true
+          if (prompt) { prompt.classList.add('hidden') }
+          sceneRoot.object3D.position.set(point.x, point.y, point.z)
+          sceneRoot.setAttribute('visible', 'true')
+
+          document.dispatchEvent(new CustomEvent('object-placed', {
+            detail: { x: point.x, y: point.y, z: point.z, autoPlaced }
+          }))
+
+          if (!autoPlaced && window.HealingSync && window.HealingSync.notifyPlaced) {
+            window.HealingSync.notifyPlaced()
+          }
+        }
 
         ground.addEventListener('click', (event) => {
-          this.prompt.style.display = 'none'
+          const intersection = event && event.detail && event.detail.intersection
+          if (!intersection || !intersection.point) { return }
+          reveal(intersection.point, false)
+        })
 
-          const newElement = document.createElement('a-entity')
-
-          const touchPoint = event.detail.intersection.point
-          newElement.setAttribute('position', touchPoint)
-
-          const randomYRotation = Math.random() * 360
-          newElement.setAttribute('rotation', `0 ${randomYRotation} 0`)
-
-          const randomScale = Math.floor(Math.random() * (Math.floor(this.data.max) - Math.ceil(this.data.min)) + Math.ceil(this.data.min))
-
-          newElement.setAttribute('visible', 'false')
-          newElement.setAttribute('scale', '0.0001 0.0001 0.0001')
-          newElement.setAttribute('shadow', {receive: false})
-          newElement.setAttribute('gltf-model', '#cactusModel')
-          this.el.sceneEl.appendChild(newElement)
-
-          newElement.addEventListener('model-loaded', () => {
-            newElement.setAttribute('visible', 'true')
-            newElement.setAttribute('animation', {
-              property: 'scale',
-              to: `${randomScale} ${randomScale} ${randomScale}`,
-              easing: 'easeOutElastic',
-              dur: 800,
-            })
-          })
+        // A remote user placed the witness — mirror their placement here.
+        document.addEventListener('placement-broadcast', () => {
+          reveal({ x: 0, y: 0, z: -1.5 }, true)
         })
       },
     })
@@ -56,60 +59,251 @@
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" crossorigin="anonymous" async="true" data-preload-chunks="slam"></script>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       AR engine component scripts. These register custom A-Frame
+       components and must run before the scene mounts them:
+         components.js          — tornado-effect, barbed-wire,
+                                  explosion-flash, character-animator
+         healing-sync           — Ably multi-user healing sync
+         end-sequence           — Mode B completion + end message
+       Ably loads first because healing-sync.js builds on it.
+       ────────────────────────────────────────────────────────────── -->
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/healing-sync.js"></script>
+  <script src="js/end-sequence.js"></script>
 </head>
 
 <body>
 
-<div class="over" style="position:fixed;top:20px;left:0;right:0;text-align:center;z-index:999;color:#fff;font-family:sans-serif;pointer-events:none">
-  <span id="promptText">Tap To Place Model</span>
-</div>
+  <!-- HUD overlay: always-on DOM layer above the AR canvas.
+       pointer-events are off so surface taps reach the scene; interactive
+       children re-enable pointer-events themselves. -->
+  <div id="ar-overlay">
+    <div id="hud-top">
+      <div id="status-pill" class="hud-pill">
+        <span id="status-dot">○</span>
+        <span id="status-text">scanning</span>
+      </div>
+      <a id="back-pill" class="hud-pill" href="/">← return</a>
+    </div>
 
-<a-scene
-  tap-place
-  landing-page
-  xrextras-loading
-  xrextras-runtime-error
-  renderer="colorManagement:true"
-  xrweb="
-    allowedDevices: any;
-    defaultEnvironmentFogIntensity: 0.5;
-    defaultEnvironmentFloorTexture: #groundTex;
-    defaultEnvironmentFloorColor: #FFF;
-    defaultEnvironmentSkyBottomColor: #B4C4CC;
-    defaultEnvironmentSkyTopColor: #5ac8fa;
-    defaultEnvironmentSkyGradientStrength: 0.5;">
+    <!-- Two stacked linear bars: healing % and souls present (out of 25) -->
+    <div id="hud-bars">
+      <div class="bar-row">
+        <span class="bar-label">HEAL</span>
+        <div id="healing-bar" class="bar-track">
+          <div id="healing-bar-fill" class="bar-fill"></div>
+        </div>
+        <span id="healing-bar-pct" class="bar-value">0%</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">SOULS</span>
+        <div id="souls-bar" class="bar-track">
+          <div id="souls-bar-fill" class="bar-fill souls"></div>
+        </div>
+        <span id="souls-bar-count" class="bar-value">1/25</span>
+      </div>
+    </div>
 
-  <a-assets>
-    <img id="groundTex" src="rag-assets/sand.jpg">
-    <a-asset-item id="cactusModel" src="rag-assets/cactus.glb"></a-asset-item>
-  </a-assets>
+    <div id="hud-bottom">
+      <div id="promptText" class="hud-pill">preparing…</div>
+    </div>
 
-  <a-camera
-    id="camera"
-    position="0 8 8"
-    raycaster="objects: .cantap"
-    cursor="fuse: false; rayOrigin: mouse;">
-  </a-camera>
+    <div id="end-overlay">
+      <div class="end-message">
+        <div class="end-line" data-delay="400">With many people speaking up —</div>
+        <div class="end-line" data-delay="1800">gun violence will be under control</div>
+        <div class="end-line" data-delay="3200">and reduced significantly.</div>
+        <div class="end-separator" data-delay="4400"></div>
+        <div class="end-tagline" data-delay="4800">The power of many.</div>
+        <button id="restart-btn" data-delay="8500">↩ press to restart</button>
+      </div>
+    </div>
+  </div>
 
-  <a-entity
-    light="type: directional; intensity: 0.8; castShadow: true; shadowMapHeight:2048; shadowMapWidth:2048; shadowCameraTop: 40; shadowCameraBottom: -40; shadowCameraRight: 40; shadowCameraLeft: -40; target: #camera"
-    xrextras-attach="target: camera; offset: 8 15 4"
-    position="1 4.3 2.5"
-    shadow>
-  </a-entity>
+  <a-scene
+    id="ar-scene"
+    tap-place
+    landing-page
+    xrextras-loading
+    xrextras-runtime-error
+    renderer="colorManagement:true"
+    xrweb="
+      allowedDevices: any;
+      defaultEnvironmentFogIntensity: 0.5;
+      defaultEnvironmentFloorTexture: #groundTex;
+      defaultEnvironmentFloorColor: #FFF;
+      defaultEnvironmentSkyBottomColor: #B4C4CC;
+      defaultEnvironmentSkyTopColor: #5ac8fa;
+      defaultEnvironmentSkyGradientStrength: 0.5;">
 
-  <a-light type="ambient" intensity="0.5"></a-light>
+    <a-assets>
+      <img id="groundTex" src="rag-assets/sand.jpg">
+    </a-assets>
 
-  <a-box
-    id="ground"
-    class="cantap"
-    scale="1000 2 1000"
-    position="0 -0.99 0"
-    material="shader: shadow; transparent: true; opacity: 0.4"
-    shadow>
-  </a-box>
-</a-scene>
+    <a-camera
+      id="camera"
+      position="0 8 8"
+      raycaster="objects: .cantap"
+      cursor="fuse: false; rayOrigin: mouse;">
+    </a-camera>
+
+    <a-entity
+      light="type: directional; intensity: 0.8; castShadow: true; shadowMapHeight:2048; shadowMapWidth:2048; shadowCameraTop: 40; shadowCameraBottom: -40; shadowCameraRight: 40; shadowCameraLeft: -40; target: #camera"
+      xrextras-attach="target: camera; offset: 8 15 4"
+      position="1 4.3 2.5"
+      shadow>
+    </a-entity>
+
+    <a-light type="ambient" intensity="0.5"></a-light>
+
+    <a-box
+      id="ground"
+      class="cantap"
+      scale="1000 2 1000"
+      position="0 -0.99 0"
+      material="shader: shadow; transparent: true; opacity: 0.4"
+      shadow>
+    </a-box>
+
+    <!-- Scene root: invisible until tap-place positions + reveals it.
+         character-animator (in components.js) async-loads
+         models/character-mode-{a,b}.glb itself — no <a-asset-item> needed. -->
+    <a-entity id="scene-root" visible="false">
+      <a-entity id="character-root" character-animator="healingPercent: 0; mode: a" position="0 -0.18 0"></a-entity>
+      <a-entity tornado-effect="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity barbed-wire="intensity: 1" position="0 0 0"></a-entity>
+      <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
+    </a-entity>
+  </a-scene>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       HUD wiring + Ably session bootstrap (inline, no ar-bootstrap.js).
+       Talks to the AR layer only through CustomEvents on `document`:
+         · healing-update     ← healing-sync.js (per Ably tick)
+         · object-placed      ← tap-place (after first tap or remote broadcast)
+         · placement-broadcast ← healing-sync.js (remote placement received)
+       And listens for 8th Wall scene events:
+         · realityready       — SLAM engine ready, kicks HealingSync.init
+         · xrtrackingstatus   — drives status pill state
+       ────────────────────────────────────────────────────────────── -->
+  <script>
+  (function () {
+    'use strict';
+
+    var statusPill   = document.getElementById('status-pill');
+    var statusDot    = document.getElementById('status-dot');
+    var statusText   = document.getElementById('status-text');
+    var promptText   = document.getElementById('promptText');
+    var healingFill  = document.getElementById('healing-bar-fill');
+    var healingPct   = document.getElementById('healing-bar-pct');
+    var soulsFill    = document.getElementById('souls-bar-fill');
+    var soulsCount   = document.getElementById('souls-bar-count');
+
+    var healingSyncStarted = false;
+    var hasPlaced = false;
+
+    /* ── Status pill helpers ────────────────────────────────────── */
+    function setSearching() {
+      statusDot.textContent = '○';
+      statusText.textContent = 'scanning';
+      statusPill.className = 'hud-pill scanning';
+      if (!hasPlaced && promptText) {
+        promptText.textContent = 'move phone to find a surface';
+        promptText.className = 'hud-pill';
+      }
+    }
+    function setSurfaceDetected() {
+      statusDot.textContent = '◎';
+      statusText.textContent = 'surface found';
+      statusPill.className = 'hud-pill surface-detected';
+      if (!hasPlaced && promptText) {
+        promptText.textContent = 'tap anywhere to place witness';
+        promptText.className = 'hud-pill tap-to-place';
+      }
+    }
+    function setPlaced() {
+      statusDot.textContent = '●';
+      statusText.textContent = 'placed';
+      statusPill.className = 'hud-pill placed';
+      hasPlaced = true;
+      if (promptText) { promptText.classList.add('hidden'); }
+    }
+
+    /* ── Linear bars ────────────────────────────────────────────── */
+    function updateHealingBar(percent) {
+      var p = Math.max(0, Math.min(100, percent));
+      healingFill.style.width = p + '%';
+      healingPct.textContent = Math.round(p) + '%';
+      healingFill.classList.toggle('glowing', p > 40);
+    }
+    function updateSoulsBar(count) {
+      var n = Math.max(0, Math.min(25, count));
+      soulsFill.style.width = (n / 25 * 100) + '%';
+      soulsCount.textContent = count + '/25';
+    }
+
+    /* ── Healing tick → bars + effect intensity + character ────── */
+    document.addEventListener('healing-update', function (e) {
+      var percent   = e.detail.percent;
+      var userCount = e.detail.userCount;
+      updateHealingBar(percent);
+      updateSoulsBar(userCount);
+
+      var intensity = Math.max(0, 1 - percent / 100);
+      var tornado   = document.querySelector('[tornado-effect]');
+      var wire      = document.querySelector('[barbed-wire]');
+      var explosion = document.querySelector('[explosion-flash]');
+      var character = document.getElementById('character-root');
+      if (tornado)   { tornado.setAttribute('tornado-effect',    'intensity', intensity); }
+      if (wire)      { wire.setAttribute('barbed-wire',          'intensity', intensity); }
+      if (explosion) { explosion.setAttribute('explosion-flash', 'intensity', intensity); }
+      if (character) { character.setAttribute('character-animator', 'healingPercent', percent); }
+    });
+
+    /* ── Object placed (local tap OR remote auto-place) ────────── */
+    document.addEventListener('object-placed', function () {
+      setPlaced();
+    });
+
+    /* ── 8th Wall lifecycle: wait for the scene, hook engine events ── */
+    function wireScene() {
+      var scene = document.getElementById('ar-scene');
+      if (!scene) { return; }
+
+      scene.addEventListener('realityready', function () {
+        setSearching();
+        if (!healingSyncStarted && window.HealingSync) {
+          healingSyncStarted = true;
+          window.HealingSync.init().then(function () {
+            var ps = window.HealingSync.getPlacementState && window.HealingSync.getPlacementState();
+            if (ps && ps.placed) {
+              // A remote user already placed before we joined — mirror it.
+              document.dispatchEvent(new CustomEvent('placement-broadcast', {
+                detail: { placed: true }
+              }));
+            }
+          }).catch(function (err) { console.error('[ar-rag] HealingSync.init failed', err); });
+        }
+      });
+
+      scene.addEventListener('xrtrackingstatus', function (evt) {
+        var status = evt && evt.detail && evt.detail.status;
+        if (hasPlaced) { return; }
+        if (status === 'NORMAL') { setSurfaceDetected(); }
+        else                     { setSearching(); }
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', wireScene);
+    } else {
+      wireScene();
+    }
+  })();
+  </script>
 
 </body>
-
 </html>
