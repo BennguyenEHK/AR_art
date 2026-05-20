@@ -10,13 +10,16 @@
   <script crossorigin="anonymous" src="vendor/8thwall/aframe-v1.5.0.min.js"></script>
 
   <!-- ──────────────────────────────────────────────────────────────
-       tap-place — modified from the cactus RAG demo:
-         · single-spawn lock (the witness is placed exactly once, ever)
-         · the spawn target is a static #scene-root that was authored
-           inside <a-scene>, NOT a per-tap createElement, so the GLBs
-           and tornado/wire/explosion are pre-warmed before the tap
-         · listens for `placement-broadcast` from healing-sync.js so
-           a remote tap auto-places this client too (shared environment)
+       tap-place — single-spawn lock; spawn target is a static
+       #scene-root authored inside <a-scene>, NOT a per-tap
+       createElement, so GLBs + tornado/wire/explosion are pre-warmed
+       before the tap.
+
+       Each user places their OWN witness independently — there is no
+       cross-user auto-spawn. The model lives in the local SLAM frame
+       at the point THIS user actually tapped. Only the placement FLAG
+       (presence.data.placed === true) is synced to other users via
+       Ably so the healing rate gating still aggregates correctly.
        ────────────────────────────────────────────────────────────── -->
   <script>
     AFRAME.registerComponent('tap-place', {
@@ -26,31 +29,24 @@
         const sceneRoot = document.getElementById('scene-root')
         const prompt = document.getElementById('promptText')
 
-        const reveal = (point, autoPlaced) => {
+        ground.addEventListener('click', (event) => {
           if (this.placed) { return }
+          const intersection = event && event.detail && event.detail.intersection
+          if (!intersection || !intersection.point) { return }
+          const point = intersection.point
+
           this.placed = true
           if (prompt) { prompt.classList.add('hidden') }
           sceneRoot.object3D.position.set(point.x, point.y, point.z)
           sceneRoot.setAttribute('visible', 'true')
 
           document.dispatchEvent(new CustomEvent('object-placed', {
-            detail: { x: point.x, y: point.y, z: point.z, autoPlaced }
+            detail: { x: point.x, y: point.y, z: point.z }
           }))
 
-          if (!autoPlaced && window.HealingSync && window.HealingSync.notifyPlaced) {
+          if (window.HealingSync && window.HealingSync.notifyPlaced) {
             window.HealingSync.notifyPlaced()
           }
-        }
-
-        ground.addEventListener('click', (event) => {
-          const intersection = event && event.detail && event.detail.intersection
-          if (!intersection || !intersection.point) { return }
-          reveal(intersection.point, false)
-        })
-
-        // A remote user placed the witness — mirror their placement here.
-        document.addEventListener('placement-broadcast', () => {
-          reveal({ x: 0, y: 0, z: -1.5 }, true)
         })
       },
     })
@@ -263,7 +259,7 @@
       if (character) { character.setAttribute('character-animator', 'healingPercent', percent); }
     });
 
-    /* ── Object placed (local tap OR remote auto-place) ────────── */
+    /* ── Object placed (local tap) ──────────────────────────────── */
     document.addEventListener('object-placed', function () {
       setPlaced();
     });
@@ -277,15 +273,9 @@
         setSearching();
         if (!healingSyncStarted && window.HealingSync) {
           healingSyncStarted = true;
-          window.HealingSync.init().then(function () {
-            var ps = window.HealingSync.getPlacementState && window.HealingSync.getPlacementState();
-            if (ps && ps.placed) {
-              // A remote user already placed before we joined — mirror it.
-              document.dispatchEvent(new CustomEvent('placement-broadcast', {
-                detail: { placed: true }
-              }));
-            }
-          }).catch(function (err) { console.error('[ar-rag] HealingSync.init failed', err); });
+          window.HealingSync.init().catch(function (err) {
+            console.error('[ar-rag] HealingSync.init failed', err);
+          });
         }
       });
 

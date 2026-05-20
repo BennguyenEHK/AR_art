@@ -11,7 +11,6 @@
   let _leaderInterval = null;
   let _lastTick = Date.now();
   let _healingComplete = false;
-  var _placementState = { placed: false, t: null };
   const PER_USER_RATE = 100 / 420;
   const MAX_USERS = 25;
 
@@ -179,13 +178,10 @@
         setTimeout(() => window.location.reload(), 600);
       });
 
-      _channel.subscribe('placement-state', function(msg) {
-        if (!msg.data || !msg.data.placed) return;
-        _placementState = { placed: true, t: msg.data.t };
-        document.dispatchEvent(new CustomEvent('placement-broadcast', {
-          detail: { placed: true }
-        }));
-      });
+      // NOTE: placement-state channel intentionally removed. Each user
+      // places their OWN witness independently — model position is local
+      // to each device's SLAM frame. Cross-user sync is limited to the
+      // presence.data.placed flag, which gates the healing rate only.
 
       await _channel.presence.enter({ joinedAt: Date.now(), placed: false });
       _channel.presence.subscribe(() => checkLeadership());
@@ -217,14 +213,13 @@
       window.addEventListener('pagehide', exitHandler);
     },
 
-    getState() { return { ..._state, placed: _placementState.placed }; },
+    getState() { return { ..._state }; },
 
     notifyPlaced: function() {
-      _placementState = { placed: true, t: Date.now() };
       if (_channel) {
-        _channel.publish('placement-state', { placed: true, t: Date.now() });
         // Mark this client as placed in presence so the leader counts it
-        // toward the healing rate.
+        // toward the healing rate. NO placement-state channel message —
+        // model position is local to each device, never propagated.
         _channel.presence.update({ joinedAt: Date.now(), placed: true });
       } else {
         // Local fallback (Ably disabled): this single user now contributes to the rate.
@@ -232,10 +227,6 @@
         _state.placedCount = 1;
         emitUpdate();
       }
-    },
-
-    getPlacementState: function() {
-      return { placed: _placementState.placed, t: _placementState.t };
     },
 
     // (a) Broadcast reset to all connected clients then reload
