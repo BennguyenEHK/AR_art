@@ -18,6 +18,10 @@
     if (!overlay) return;
     overlay.classList.add('visible');
 
+    // Healing is done — freeze the HUD bars so they stop updating
+    const hudBars = document.getElementById('hud-bars');
+    if (hudBars) hudBars.style.display = 'none';
+
     // Reveal all timed elements (lines, separator, tagline, restart button)
     const els = overlay.querySelectorAll('[data-delay]');
     els.forEach(function(el) {
@@ -25,15 +29,11 @@
       setTimeout(function() { el.classList.add('revealed'); }, delay);
     });
 
-    // Wire restart button click — broadcast reset to all users then reload
+    // Wire restart button — LOCAL reload only, no broadcast to other users
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) {
       restartBtn.addEventListener('click', function() {
-        if (window.HealingSync && window.HealingSync.reset) {
-          window.HealingSync.reset();
-        } else {
-          window.location.reload();
-        }
+        window.location.reload();
       });
     }
   }
