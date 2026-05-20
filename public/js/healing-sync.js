@@ -44,7 +44,6 @@
       sessionStorage.setItem('ar-art-clientId', fresh);
       return fresh;
     } catch (_e) {
-      // Private mode or sessionStorage blocked — fall back to per-visit UUID
       return generateClientId();
     }
   }
@@ -195,11 +194,7 @@
       // Eager presence cleanup on actual exit signals. beforeunload alone
       // is unreliable on mobile — iOS Safari + Android Chrome often don't
       // fire it for link navigation. pagehide IS reliably fired on real
-      // navigation away on both platforms (it's the modern standard).
-      // We intentionally do NOT use visibilitychange here: it fires on
-      // tab backgrounding (multitasking switcher) where the page is
-      // still alive — leaving presence there would make the user vanish
-      // from the SOULS bar while still being on /ar.
+      // navigation away on both platforms.
       function exitHandler() {
         // (b) Abandonment marker: last user leaving publishes userCount=0
         // so the next visitor can compute retroactive decay via rewind.
@@ -247,7 +242,12 @@
     reset() {
       if (_channel) {
         _channel.publish('healing-reset', { t: Date.now() });
-        _channel.publish('healing-state', { percent: 0, userCount: _state.userCount, placedCount: _state.placedCount, t: Date.now() });
+        _channel.publish('healing-state', {
+          percent: 0,
+          userCount: _state.userCount,
+          placedCount: _state.placedCount,
+          t: Date.now()
+        });
       }
       setTimeout(() => window.location.reload(), 400);
     },
