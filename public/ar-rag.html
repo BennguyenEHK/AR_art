@@ -59,6 +59,26 @@
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/xrextras@1/dist/xrextras.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/landing-page@1/dist/landing-page.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" crossorigin="anonymous" async="true" data-preload-chunks="slam"></script>
+
+  <!-- ──────────────────────────────────────────────────────────────
+       Custom AR engine + sync scripts MUST load in <head> (before
+       <a-scene> is parsed) so AFRAME.registerComponent() runs first.
+       A-Frame does NOT reliably retro-attach components to entities
+       that were parsed without their components being registered yet.
+       Loading these in <body> after <a-scene> (commit 4088240) broke
+       the camera on both Android and iOS because tornado-effect,
+       character-animator, etc. never bound to their entities, which
+       cascaded into xrweb failing to render. Reverting to in-head.
+         · ably         — realtime client (must precede healing-sync)
+         · components   — tornado-effect, barbed-wire, explosion-flash,
+                          character-animator
+         · healing-sync — Ably multi-user healing sync
+         · end-sequence — Mode B completion + end message
+       ────────────────────────────────────────────────────────────── -->
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/healing-sync.js"></script>
+  <script src="js/end-sequence.js"></script>
 </head>
 
 <body>
@@ -164,27 +184,6 @@
       <a-entity explosion-flash="intensity: 1" position="0 0 0"></a-entity>
     </a-entity>
   </a-scene>
-
-  <!-- ──────────────────────────────────────────────────────────────
-       AR engine component scripts. Loaded HERE (end of body, after
-       <a-scene>) instead of in <head> for two reasons:
-         1) iOS Safari: synchronous scripts in <head> after the async
-            engine-binary widen the realityready race window (iOS can
-            boot the cached engine and fire realityready before our
-            listener attaches if the head is loaded with extra sync work).
-         2) Matches the working 0f46401 baseline that ran on both iOS
-            and Android. A-Frame supports late component registration,
-            so components.js registering tornado/character/etc. after
-            <a-scene> parsing is safe — A-Frame mounts them on next tick.
-       Ably loads first because healing-sync.js builds on it.
-       components.js — tornado-effect, barbed-wire, explosion-flash, character-animator
-       healing-sync.js — Ably multi-user healing sync
-       end-sequence.js — Mode B completion + end message
-       ────────────────────────────────────────────────────────────── -->
-  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
-  <script src="js/components.js"></script>
-  <script src="js/healing-sync.js"></script>
-  <script src="js/end-sequence.js"></script>
 
   <!-- ──────────────────────────────────────────────────────────────
        HUD wiring + Ably session bootstrap (inline, no ar-bootstrap.js).
