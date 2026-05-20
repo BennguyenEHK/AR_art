@@ -103,18 +103,12 @@
        loading + errors. -->
   <a-scene
     id="ar-scene"
-    xrweb="allowedDevices: any; defaultEnvironmentFogIntensity: 0.5; defaultEnvironmentFloorColor: #3a3028; defaultEnvironmentSkyBottomColor: #1a1511; defaultEnvironmentSkyTopColor: #0d0d0d; defaultEnvironmentSkyGradientStrength: 0.8"
     landing-page
     xrextras-loading
     xrextras-runtime-error
-    renderer="antialias: true; alpha: true; logarithmicDepthBuffer: false; colorManagement: true"
-    vr-mode-ui="enabled: false"
+    renderer="colorManagement: true"
+    xrweb="allowedDevices: any; defaultEnvironmentFogIntensity: 0.5; defaultEnvironmentFloorColor: #3a3028; defaultEnvironmentSkyBottomColor: #1a1511; defaultEnvironmentSkyTopColor: #0d0d0d; defaultEnvironmentSkyGradientStrength: 0.8"
   >
-    <a-assets>
-      <a-asset-item id="modelA" src="models/character-mode-a.glb"></a-asset-item>
-      <a-asset-item id="modelB" src="models/character-mode-b.glb"></a-asset-item>
-    </a-assets>
-
     <a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #ffffff; intensity: 0.6" position="1 2 1"></a-entity>
 
