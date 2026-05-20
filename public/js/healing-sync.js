@@ -31,6 +31,34 @@
     return 'client-' + Math.random().toString(36).slice(2, 10);
   }
 
+  // Stable clientId across reloads within the same browser session.
+  // Without this, every visit generated a fresh UUID, so a user who
+  // returned to /ar within Ably's 15-second presence timeout window
+  // appeared as TWO members (the timing-out ghost + the new connection),
+  // causing the SOULS bar to over-count on rejoin.
+  function getStableClientId() {
+    try {
+      var existing = sessionStorage.getItem('ar-art-clientId');
+      if (existing) { return existing; }
+      var fresh = generateClientId();
+      sessionStorage.setItem('ar-art-clientId', fresh);
+      return fresh;
+    } catch (_e) {
+      // Private mode or sessionStorage blocked — fall back to per-visit UUID
+      return generateClientId();
+    }
+  }
+
+  // Explicit Ably presence.leave() on exit. Without this, navigation
+  // away (e.g. tapping the "return" link) leaves the user as a "ghost"
+  // in presence for ~15 seconds (Ably's default heartbeat timeout), so
+  // the SOULS bar on other clients doesn't decrement. Hooked to both
+  // beforeunload (desktop) and pagehide (mobile).
+  function leavePresenceGracefully() {
+    if (!_channel) { return; }
+    try { _channel.presence.leave(); } catch (_e) {}
+  }
+
   async function checkLeadership() {
     if (!_channel) return;
     try {
@@ -123,7 +151,7 @@
       const config = await fetchConfig();
       if (!config.ablyEnabled || !config.ablyKey) { runLocalFallback(); return; }
 
-      _clientId = generateClientId();
+      _clientId = getStableClientId();
       _realtime = new Ably.Realtime({ key: config.ablyKey, clientId: _clientId });
       _channel = _realtime.channels.get(config.channelName, { params: { rewind: '1' } });
 
@@ -164,10 +192,17 @@
       _channel.presence.subscribe(() => checkLeadership());
       await checkLeadership();
 
-      // (b) Abandonment marker: last user leaving publishes userCount=0 + timestamp
-      // so the next visitor can compute retroactive decay via rewind.
-      // userCount<=1 means this client is the last presence member on /ar.
-      window.addEventListener('beforeunload', () => {
+      // Eager presence cleanup on actual exit signals. beforeunload alone
+      // is unreliable on mobile — iOS Safari + Android Chrome often don't
+      // fire it for link navigation. pagehide IS reliably fired on real
+      // navigation away on both platforms (it's the modern standard).
+      // We intentionally do NOT use visibilitychange here: it fires on
+      // tab backgrounding (multitasking switcher) where the page is
+      // still alive — leaving presence there would make the user vanish
+      // from the SOULS bar while still being on /ar.
+      function exitHandler() {
+        // (b) Abandonment marker: last user leaving publishes userCount=0
+        // so the next visitor can compute retroactive decay via rewind.
         if (_isLeader && _state.userCount <= 1 && _state.phase === 'healing') {
           try {
             _channel.publish('healing-state', {
@@ -178,7 +213,13 @@
             });
           } catch(_e) {}
         }
-      });
+        // Explicit leave drops this client from presence immediately so
+        // other clients' SOULS bar decrements without waiting for the
+        // 15-second Ably heartbeat timeout.
+        leavePresenceGracefully();
+      }
+      window.addEventListener('beforeunload', exitHandler);
+      window.addEventListener('pagehide', exitHandler);
     },
 
     getState() { return { ..._state, placed: _placementState.placed }; },
