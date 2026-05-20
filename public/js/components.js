@@ -622,7 +622,22 @@
         this.flyElapsed = Math.min(this.FLY_DURATION, this.flyElapsed + dt);
         var t    = this.flyElapsed / this.FLY_DURATION;
         var ease = 1 - Math.pow(1 - t, 2);
-        this.groupB.position.y = ease * this.FLY_END_Y;
+        // FLY_END_Y is expressed in world-space units (~2.8 m), but
+        // groupB sits inside #character-root inside #scene-root which
+        // has scale="5 5 5" in HTML. Without compensation the angel
+        // would fly to world Y = 2.8 × 5 = 14, well past where the
+        // camera frames the scene. Compensate by dividing the local
+        // target by the parent chain's effective Y scale so the
+        // world-space rise stays at FLY_END_Y regardless of how
+        // scene-root is scaled.
+        var parentScaleY = 1;
+        var p = this.el.object3D.parent;
+        while (p) {
+          if (p.scale) { parentScaleY *= p.scale.y; }
+          p = p.parent;
+        }
+        if (parentScaleY <= 0) { parentScaleY = 1; }
+        this.groupB.position.y = (ease * this.FLY_END_Y) / parentScaleY;
 
         if (this.flyElapsed >= this.FLY_DURATION) {
           this.flyingUp = false;
