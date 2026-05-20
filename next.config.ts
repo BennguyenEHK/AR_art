@@ -9,19 +9,38 @@ const nextConfig: NextConfig = {
     // CSP for the AR page. ar-rag.html loads the 8th Wall packages + engine
     // binary from jsDelivr and Ably realtime from its CDN; 8frame is
     // self-hosted under /vendor/8thwall (the 8th Wall CDN is gone).
+    //
+    // CRITICAL: the 8th Wall WebAR engine performs a license-validation
+    // request to *.8thwall.com (typically apps.8thwall.com) at startup
+    // — if connect-src does not allow that origin the WASM engine fails
+    // silently, the @8thwall/landing-page "TAP TO ENTER AR" splash is
+    // never injected, the user never produces a gesture, and the camera
+    // is never requested. Until 379cd28 this CSP only applied to /ar.html
+    // (now deleted); when scope moved to /ar-rag.html the missing
+    // *.8thwall.com allowlist became the dominant cause of the
+    // "no splash, no camera" symptom on both Android and iOS. *.8thwall.com
+    // is also added to script-src/img-src/font-src/frame-src defensively
+    // because landing-page historically loads logo/font/iframe assets
+    // from sibling subdomains.
     const arCsp = [
       "default-src 'self'",
       // 'wasm-unsafe-eval' + blob: are required by the 8th Wall engine — its
       // SLAM tracker is WebAssembly and it spawns blob-URL web workers.
-      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.ably.com",
-      "connect-src 'self' blob: https://cdn.jsdelivr.net https://cdn.ably.com https://*.ably.io https://*.ably-realtime.com wss://*.ably.io wss://*.ably-realtime.com",
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://cdn.ably.com https://*.8thwall.com",
+      "connect-src 'self' blob: https://cdn.jsdelivr.net https://cdn.ably.com https://*.ably.io https://*.ably-realtime.com wss://*.ably.io wss://*.ably-realtime.com https://*.8thwall.com",
       // fonts.googleapis.com serves the @import CSS; fonts.gstatic.com serves woff2 files.
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       // jsDelivr serves xrextras/landing-page splash assets.
-      "img-src 'self' data: blob: https://cdn.jsdelivr.net",
+      "img-src 'self' data: blob: https://cdn.jsdelivr.net https://*.8thwall.com",
       "media-src 'self' data: blob:",
       "worker-src 'self' blob:",
-      "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
+      "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://*.8thwall.com",
+      // landing-page historically renders the splash inside a same-origin
+      // (or blob:) iframe. frame-src is not set elsewhere, so without this
+      // line it falls back to default-src 'self' and the iframe still works,
+      // BUT making the allowance explicit also enables blob: iframes used
+      // by some 8th Wall flows.
+      "frame-src 'self' blob: https://*.8thwall.com",
     ].join("; ");
 
     return [
