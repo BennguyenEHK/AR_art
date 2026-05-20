@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
 
   // Camera/AR is a hard requirement, so make sure the browser sees the permission policy
   async headers() {
-    // CSP for the AR page. ar.html loads the 8th Wall packages + engine
+    // CSP for the AR page. ar-rag.html loads the 8th Wall packages + engine
     // binary from jsDelivr and Ably realtime from its CDN; 8frame is
     // self-hosted under /vendor/8thwall (the 8th Wall CDN is gone).
     const arCsp = [
@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
       {
         // Scoped to the AR page only — the rest of the site has no need for
         // the cross-origin script/connect allowances the AR engines require.
-        source: "/ar.html",
+        source: "/ar-rag.html",
         headers: [
           { key: "Content-Security-Policy", value: arCsp },
         ],
